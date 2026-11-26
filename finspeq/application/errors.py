@@ -21,3 +21,11 @@ class PublishFailedError(PortError):
 
 class PositionGapError(PortError):
     """A batch's unapplied offsets do not continue directly from the stored position."""
+
+
+class EvaluationError(FinspeqError):
+    """Scores and labels cannot be evaluated: empty, unequal lengths, or a single class."""
+
+
+class InvalidSourceDataError(PortError):
+    """A historical record is out of canonical order or violates a domain rule."""

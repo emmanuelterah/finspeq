@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Protocol
 
 from finspeq.application.messages import (
@@ -10,11 +10,18 @@ from finspeq.application.messages import (
     DatasetRef,
     EventBatch,
     EventPosition,
+    LabeledTransaction,
+    ModelArtifact,
+    ModelRef,
+    ScoredSplit,
+    Split,
+    TimeRange,
     TrainingRow,
+    TrainParams,
 )
 from finspeq.domain.features import FeatureVector
 from finspeq.domain.model import CardId, OrderKey, Transaction
-from finspeq.domain.policy import Score
+from finspeq.domain.policy import Score, Thresholds
 from finspeq.domain.scored import ScoredTransaction
 from finspeq.domain.window import CardWindow
 
@@ -51,6 +58,10 @@ class WindowWriter(Protocol):
     def position(self, partition: int) -> EventPosition | None:
         """Return the last applied position for partition, or None if nothing was applied."""
         ...
+
+
+class WindowStore(WindowReader, WindowWriter, Protocol):
+    """A store that implements both window ports."""
 
 
 class FraudModel(Protocol):
@@ -128,6 +139,18 @@ class DecisionLedger(Protocol):
         ...
 
 
+class HistoricalSource(Protocol):
+    """Reader of labelled historical transactions in canonical order."""
+
+    def iter_labeled(self, time_range: TimeRange | None) -> Iterator[LabeledTransaction]:
+        """Yield labelled transactions in (time, tx_id) order, limited to time_range if given.
+
+        Raises:
+            InvalidSourceDataError: A record is out of canonical order or violates a domain rule.
+        """
+        ...
+
+
 class TrainingSink(Protocol):
     """Writer of one training dataset."""
 
@@ -137,6 +160,36 @@ class TrainingSink(Protocol):
 
     def close(self) -> DatasetRef:
         """Finish the dataset, make it visible in one atomic step, and return its reference."""
+        ...
+
+
+class ModelTrainer(Protocol):
+    """Trainer of fraud models on a training dataset."""
+
+    def train(self, dataset: DatasetRef, params: TrainParams, output: str) -> ModelArtifact:
+        """Fit on the TRAIN split with early stopping on VALID and write the model to output.
+
+        The same dataset, params, and library version produce an identical model file.
+        """
+        ...
+
+
+class BatchScorer(Protocol):
+    """Scorer of every row of a dataset split."""
+
+    def score(self, dataset: DatasetRef, split: Split) -> ScoredSplit:
+        """Return a score and the label of every row of split, in dataset order."""
+        ...
+
+
+class ModelExporter(Protocol):
+    """Converter of trained models into inference models with metadata."""
+
+    def export(self, artifact: ModelArtifact, thresholds: Thresholds, root: str) -> ModelRef:
+        """Write the inference model and its metadata into a new directory under root.
+
+        The directory appears only when complete. Its name is the inference model's version.
+        """
         ...
 
 
@@ -155,8 +208,8 @@ class Metrics(Protocol):
 
 
 class Clock(Protocol):
-    """Source of wall-clock time for latency measurement only."""
+    """Source of monotonic time for latency measurement only; never used for features."""
 
     def now(self) -> float:
-        """Return the current wall-clock time in seconds since the Unix epoch."""
+        """Return a monotonic time in seconds; only differences between calls are meaningful."""
         ...

@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from finspeq.application.errors import InvalidMessageError
-from finspeq.application.messages import Event, EventBatch, EventPosition
+from finspeq.application.messages import Event, EventBatch, EventPosition, TimeRange
+from finspeq.domain.model import EventTime
 from tests.factories import batch, make_tx
 
 
@@ -37,3 +38,17 @@ def test_batch_with_event_from_other_partition_is_rejected() -> None:
 def test_last_position_is_the_final_event_position() -> None:
     """Return the position of the last event."""
     assert batch((3, make_tx(1)), (4, make_tx(2))).last_position == EventPosition(0, 4)
+
+
+def test_time_range_is_half_open() -> None:
+    """Contain the start and exclude the end."""
+    time_range = TimeRange(EventTime(10), EventTime(20))
+    assert time_range.contains(EventTime(10))
+    assert time_range.contains(EventTime(19))
+    assert not time_range.contains(EventTime(20))
+
+
+def test_empty_time_range_is_rejected() -> None:
+    """Reject a range whose start is not before its end."""
+    with pytest.raises(InvalidMessageError):
+        TimeRange(EventTime(20), EventTime(20))
