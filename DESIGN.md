@@ -217,7 +217,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 - Write the feature worker: poll loop, `RedisWindowStore` with `apply_batch.lua`, manual commit.
 - Build the replay-equality harness (§6). It passes with no faults.
 
-### M2: Crashes and delivery guarantees
+### M2: Crashes and delivery guarantees (done; results in notes/m2.md)
 
 - Kill the worker at random points (after the Redis write, before the commit).
 - Show that a naive `INCR` counter double-counts, while an idempotent `ZADD` on `tx_id` does not.

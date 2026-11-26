@@ -23,5 +23,6 @@ ROADMAP.md
 roadmap.md
 private/
 
-# Tool scratch
+# Tool scratch and local run logs (may contain local paths)
 .tmp/
+notes/*.log

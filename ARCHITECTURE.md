@@ -514,6 +514,7 @@ the API fill it with the vector, score, decision, and model version.
 | 007 | No stream-processing framework; hand-written consumer loops | Accepted |
 | 008 | No DI framework; manual composition roots | Accepted |
 | 009 | Drop the category feature (FEATURE_SET_V2) because of the category–time confound | Accepted |
+| 010 | Crash testing: seeded fault injection, supervisor drills, naive baseline | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 

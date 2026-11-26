@@ -1,0 +1,9 @@
+{
+  "batches": 232,
+  "events": 115720,
+  "applied": 115720,
+  "skipped": 0,
+  "busy_s": 11.707066799994209,
+  "stopped_by": "idle",
+  "events_per_second": 9884.627975306099
+}

@@ -1,0 +1,43 @@
+{
+  "runs_total": 2,
+  "exit_codes": {
+    "1": 1,
+    "0": 1
+  },
+  "seconds": 33.7,
+  "max_divergence": 0,
+  "runs_with_divergence": 0,
+  "redis_kill": {
+    "after_s": 6.0,
+    "stored_before": [
+      36249
+    ],
+    "stored_after_restart": [
+      38399
+    ]
+  },
+  "runs": [
+    {
+      "run": 0,
+      "exit_code": 1,
+      "seconds": 10.156,
+      "stored_offsets": [
+        38399
+      ],
+      "committed_offsets": [
+        38400
+      ]
+    },
+    {
+      "run": 1,
+      "exit_code": 0,
+      "seconds": 22.515,
+      "stored_offsets": [
+        115719
+      ],
+      "committed_offsets": [
+        115720
+      ]
+    }
+  ]
+}
