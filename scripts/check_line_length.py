@@ -7,7 +7,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 MAX_LENGTH = 100
-SOURCE_SUFFIXES = frozenset({".py", ".lua", ".sql", ".toml", ".yml", ".yaml", ".cfg", ".ini"})
+SOURCE_SUFFIXES = frozenset(
+    {".py", ".lua", ".sql", ".toml", ".yml", ".yaml", ".cfg", ".ini", ".sh"}
+)
 MARKDOWN_SUFFIX = ".md"
 SKIPPED_DIRS = frozenset(
     {

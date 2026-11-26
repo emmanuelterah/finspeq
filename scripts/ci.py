@@ -20,7 +20,18 @@ def steps() -> list[tuple[str, list[str]]]:
         ("types", [PYTHON, "-m", "mypy"]),
         ("imports", [lint_imports]),
         ("line length", [PYTHON, "scripts/check_line_length.py"]),
-        ("tests", [PYTHON, "-m", "pytest", "tests/unit", "tests/contract", "tests/adapters"]),
+        (
+            "tests",
+            [
+                PYTHON,
+                "-m",
+                "pytest",
+                "tests/unit",
+                "tests/contract",
+                "tests/adapters",
+                "tests/experiments",
+            ],
+        ),
     ]
 
 

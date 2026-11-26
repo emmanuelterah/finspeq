@@ -83,7 +83,7 @@ known-first-party = ["finspeq", "tests"]
 [tool.mypy]
 strict = true
 python_version = "3.11"
-files = ["finspeq", "tests", "scripts"]
+files = ["finspeq", "tests", "scripts", "experiments"]
 
 [[tool.mypy.overrides]]
 module = [
