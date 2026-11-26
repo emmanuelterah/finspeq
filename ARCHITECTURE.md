@@ -516,6 +516,7 @@ the API fill it with the vector, score, decision, and model version.
 | 009 | Drop the category feature (FEATURE_SET_V2) because of the category–time confound | Accepted |
 | 010 | Crash testing: seeded fault injection, supervisor drills, naive baseline | Accepted |
 | 011 | Allowed lateness 1 h; late events are applied, never dropped | Accepted |
+| 012 | Keyed partitioning required; recovery never depends on partition ownership | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 

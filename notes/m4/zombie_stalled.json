@@ -1,0 +1,85 @@
+{
+  "consumers": [
+    {
+      "report": {
+        "batches": 1342,
+        "events": 263619,
+        "applied": 263419,
+        "skipped": 200,
+        "behind": 0,
+        "busy_s": 57.431270799999766,
+        "poll_s": 13.790727100124059,
+        "apply_s": 22.516429699899163,
+        "apply_p50_ms": 14.643700000306126,
+        "apply_p99_ms": 45.9259999988717,
+        "stopped_by": "idle",
+        "events_per_second": 4590.164840998104
+      },
+      "rebalances": [
+        {
+          "at": 1795717030.594581,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717051.524137,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717052.059459,
+          "kind": "poll-timeout",
+          "partitions": []
+        },
+        {
+          "at": 1795717052.6931922,
+          "kind": "assign",
+          "partitions": [
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717115.5904062,
+          "kind": "revoke",
+          "partitions": [
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717115.598669,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717118.398054,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "events": 263619,
+  "events_per_second": 4590.164840998104
+}

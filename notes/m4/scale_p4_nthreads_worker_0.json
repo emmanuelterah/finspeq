@@ -1,0 +1,178 @@
+{
+  "consumers": [
+    {
+      "report": {
+        "batches": 306,
+        "events": 152559,
+        "applied": 152559,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 44.132621999997355,
+        "poll_s": 12.519094300048891,
+        "apply_s": 31.59713509993162,
+        "apply_p50_ms": 98.60740000294754,
+        "apply_p99_ms": 283.11789999861503,
+        "stopped_by": "idle",
+        "events_per_second": 3456.8306410620503
+      },
+      "rebalances": [
+        {
+          "at": 1795716334.8315313,
+          "kind": "assign",
+          "partitions": [
+            2
+          ]
+        },
+        {
+          "at": 1795716387.6651955,
+          "kind": "revoke",
+          "partitions": [
+            2
+          ]
+        },
+        {
+          "at": 1795716387.6845965,
+          "kind": "assign",
+          "partitions": [
+            2
+          ]
+        },
+        {
+          "at": 1795716388.9677424,
+          "kind": "revoke",
+          "partitions": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "report": {
+        "batches": 317,
+        "events": 158346,
+        "applied": 158346,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 44.86132579999685,
+        "poll_s": 12.50673589991493,
+        "apply_s": 32.33820650000416,
+        "apply_p50_ms": 94.05589999369113,
+        "apply_p99_ms": 270.64010000322014,
+        "stopped_by": "idle",
+        "events_per_second": 3529.6772259015834
+      },
+      "rebalances": [
+        {
+          "at": 1795716334.831021,
+          "kind": "assign",
+          "partitions": [
+            3
+          ]
+        },
+        {
+          "at": 1795716387.6651955,
+          "kind": "revoke",
+          "partitions": [
+            3
+          ]
+        },
+        {
+          "at": 1795716387.6866844,
+          "kind": "assign",
+          "partitions": [
+            3
+          ]
+        },
+        {
+          "at": 1795716389.664057,
+          "kind": "revoke",
+          "partitions": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "report": {
+        "batches": 291,
+        "events": 145014,
+        "applied": 145014,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 41.1104645000014,
+        "poll_s": 10.500732599997718,
+        "apply_s": 30.594671500002733,
+        "apply_p50_ms": 96.77360000205226,
+        "apply_p99_ms": 305.8323999939603,
+        "stopped_by": "idle",
+        "events_per_second": 3527.4230482118505
+      },
+      "rebalances": [
+        {
+          "at": 1795716334.832065,
+          "kind": "assign",
+          "partitions": [
+            1
+          ]
+        },
+        {
+          "at": 1795716385.9513502,
+          "kind": "revoke",
+          "partitions": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "report": {
+        "batches": 307,
+        "events": 153297,
+        "applied": 153297,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 44.06787110000005,
+        "poll_s": 11.286630299975513,
+        "apply_s": 32.765212299978884,
+        "apply_p50_ms": 100.12290000304347,
+        "apply_p99_ms": 282.94889999961015,
+        "stopped_by": "idle",
+        "events_per_second": 3478.6568121735254
+      },
+      "rebalances": [
+        {
+          "at": 1795716334.8315313,
+          "kind": "assign",
+          "partitions": [
+            0
+          ]
+        },
+        {
+          "at": 1795716387.6651955,
+          "kind": "revoke",
+          "partitions": [
+            0
+          ]
+        },
+        {
+          "at": 1795716387.687726,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "at": 1795716388.9001834,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "events": 609216,
+  "events_per_second": 13579.982069991405
+}

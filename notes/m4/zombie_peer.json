@@ -1,0 +1,60 @@
+{
+  "consumers": [
+    {
+      "report": {
+        "batches": 1759,
+        "events": 345797,
+        "applied": 345797,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 43.40713339999638,
+        "poll_s": 16.70195470014005,
+        "apply_s": 26.621828400071536,
+        "apply_p50_ms": 13.143800002580974,
+        "apply_p99_ms": 45.91400000208523,
+        "stopped_by": "idle",
+        "events_per_second": 7966.363427261677
+      },
+      "rebalances": [
+        {
+          "at": 1795717040.6058004,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717052.6811147,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795717052.6931922,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "at": 1795717114.0466685,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "events": 345797,
+  "events_per_second": 7966.363427261677
+}

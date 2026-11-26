@@ -13,16 +13,17 @@ to streaming systems. Each section opens with a plain-language summary, then goe
 6. [M1: proving the live store equals a replay](#6-m1-proving-the-live-store-equals-a-replay)
 7. [M2: crashes and "effectively once"](#7-m2-crashes-and-effectively-once)
 8. [M3: late events and choosing allowed lateness](#8-m3-late-events-and-choosing-allowed-lateness)
-9. [Engineering standards](#9-engineering-standards)
-10. [What comes next, and what we learned](#10-what-comes-next-and-what-we-learned)
-11. [Glossary](#11-glossary)
+9. [M4: several workers, rebalances and the key](#9-m4-several-workers-rebalances-and-the-key)
+10. [Engineering standards](#10-engineering-standards)
+11. [What comes next, and what we learned](#11-what-comes-next-and-what-we-learned)
+12. [Glossary](#12-glossary)
 
 ---
 
 ## 1. In one page
 
 Finspeq scores card payments for fraud as they stream in, and it is built so that replaying the
-same stream always gives the same answer, byte for byte. Four milestones (M0 to M3) are done, and
+same stream always gives the same answer, byte for byte. Five milestones (M0 to M4) are done, and
 every guarantee below was measured on one laptop.
 
 > **In plain terms.** Imagine a bank's fraud checker that keeps a running notebook for each card:
@@ -42,6 +43,7 @@ falls behind, or is split across more consumers.
 | 108 hard crashes of the feature worker | 0 differences; a naive counter over-counted 4.93% ($353,039) |
 | Redis killed mid-run, then a full rebuild from the start of the log | 0 differences; rebuild at 9,845 events/s |
 | Events delayed up to 24 h plus 1% duplicates, with 109 crashes | 0 differences against a replay of the same arrival order |
+| 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | 0 differences; up to 24,063 events/s |
 
 **What it is built from.** Python 3.11, Redpanda (a Kafka-compatible event log), Redis, Postgres,
 LightGBM exported to ONNX, and Docker Compose. There is no stream-processing framework: the
@@ -179,7 +181,7 @@ flowchart LR
     API -.->|"publishes decision"| R
 ```
 
-Solid lines are built (M0 to M3); dashed lines are planned for M5.
+Solid lines are built (M0 to M4); dashed lines are planned for M5.
 
 1. A **simulator** replays history into the log in canonical order. It can delay and duplicate
    events on purpose, with a seed so the same disorder can be produced again.
@@ -465,7 +467,68 @@ same arrival order with 0 mismatches on all 417 cards, covering all 116,864 arri
 duplicates. The final state depends on the arrival order only, not on batch sizes or crashes.
 Full results: [notes/m3.md](../notes/m3.md).
 
-## 9. Engineering standards
+## 9. M4: several workers, rebalances and the key
+
+Several workers can share the stream with no loss of correctness, through rebalances and a
+stalled "zombie" worker, as long as every event is keyed by its card.
+
+> **In plain terms.** One clerk could not keep up forever, so we hired several and split the
+> cards between them. Two things could go wrong: one card's pages landing on different desks,
+> and a clerk who dozes off, gets replaced, then wakes up and writes stale notes. We tested both.
+
+### Why the key matters
+
+Kafka splits a topic into partitions and keeps order only inside one partition. Finspeq keys
+every event by card number, so Kafka's murmur2 hash sends all of a card's events to the same
+partition. A Python copy of that hash matches Kafka's own test values, and an integration test
+confirms the broker puts every card where it predicts.
+
+To see what the key buys, the simulator can ignore it and deal events round-robin over 4
+partitions. On the 115,720-event slice with 4 workers:
+
+| | Keyed by card | Round-robin |
+|---|---|---|
+| Events stored behind a later event of their card | 0 | 78,049 (67%) |
+| Final windows vs replay | 0 mismatches | 0 mismatches |
+| Feature vectors wrong when scored on arrival | 0 | 77,820 (67%) |
+| Review false-positive rate | 0.52% | 1.26% |
+| Frauds blocked (of 956) | 755 | 666 |
+
+The final state still matched a replay, because pruning depends only on each card's newest
+event. The damage is in the features read along the way, which a final-state check cannot
+see; the store now counts out-of-order events on every write, so it is visible.
+
+### Scaling and its limit
+
+A backlog of 609,216 events drained at 6,958 events/s with one worker and 24,063 events/s with
+eight workers on eight partitions; every multi-worker run matched a replay. Scaling was not
+linear: between two and four workers it flattened at 11,000 to 12,000 events/s. The laptop
+itself is the bottleneck. Redis spends only about 8 ms per 500-event script call and held
+7.4 MB, but the workers, Redpanda, Redis and Docker's port forwarding share the same CPUs.
+Four threads in one process did as well as four processes, so Python's GIL is not the limit.
+Batches of 500 gave the best throughput; larger batches only made each write wait longer.
+
+### Rebalances and the zombie
+
+| Test | Result |
+|---|---|
+| Two joins and a leave, eager `range` | Every partition paused briefly: median 0.09 s, max 0.76 s; 0 mismatches |
+| The same, `cooperative-sticky` | Only moving partitions paused, but for about 2 s; 0 mismatches |
+| A worker stalls 20 s, past the 10 s poll limit | The group evicts it; on waking it writes its old 200-event batch, and all 200 are skipped; 0 mismatches |
+
+No fencing was needed: the new owner starts after the position stored in Redis, and the
+zombie's late write fails the same position check
+([ADR-012](adr/012-partitioning-and-assignment.md)).
+
+### Live load
+
+With four workers consuming, the simulator published at 4,995 events/s and, asked for 10,000,
+reached 6,098 events/s; lag never exceeded 2,575 events (about half a second). The end-to-end
+limit on this laptop is the producer waiting for durable acknowledgements, about 6,000
+events/s, with two to four times that in consumer headroom. Full results:
+[notes/m4.md](../notes/m4.md).
+
+## 10. Engineering standards
 
 Every rule in the codebase is enforced by a tool in CI, not by memory, and determinism is designed
 in rather than tested in afterwards.
@@ -519,19 +582,18 @@ See [CODING_STANDARDS.md](../CODING_STANDARDS.md).
 | Replay | Level A and Level B equality checks against the memory reference |
 | Drills | Crash, kill and disorder scripts whose reports are committed in `notes/` |
 
-Eleven [architecture decision records](adr/) document the choices that shape the system, each
+Twelve [architecture decision records](adr/) document the choices that shape the system, each
 with its context and consequences.
 
-## 10. What comes next, and what we learned
+## 11. What comes next, and what we learned
 
-The next milestones take the same invariant to several workers and then to a live scoring API;
+The next milestone takes the same invariant to a live scoring API;
 the main lessons so far are about where guarantees really come from.
 
 ### Next milestones
 
 | Milestone | Goal | The question it answers |
 |---|---|---|
-| M4: scaling out | 4 to 8 partitions keyed by card, several workers in one group, more than 5,000 events/s | Does the invariant hold through rebalances, and what breaks if events are sent without a key? |
 | M5: the hot path | A FastAPI scoring endpoint, a Postgres decision ledger, load tests with p50, p95, p99 | Two payments from one card milliseconds apart: wait for the first write, or accept and measure the stale read? |
 | M6 (optional) | Drift reports, dashboards, a shadow model, delayed labels | How does the model age, and how would we know? |
 
@@ -550,7 +612,7 @@ the main lessons so far are about where guarantees really come from.
 6. **Reference implementations pay for themselves.** The in-memory store is short, obviously
    correct, and the yardstick for every check.
 
-## 11. Glossary
+## 12. Glossary
 
 | Term | Meaning |
 |---|---|

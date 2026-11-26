@@ -231,7 +231,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 - Choose a policy for events that arrive after the watermark (drop, side-output, or correct the state), and measure how it affects features.
 - Metrics: late-event count and watermark lag.
 
-### M4: Scaling out
+### M4: Scaling out (done; results in notes/m4.md)
 
 - Use 4–8 partitions keyed by `card_id`; run several workers in one consumer group.
 - Experiment: produce with no key and watch per-card ordering, and therefore the features, break.

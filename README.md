@@ -11,7 +11,7 @@ measurements, not to assert it.
 ![mypy strict](https://img.shields.io/badge/mypy-strict-1F5082)
 ![ruff](https://img.shields.io/badge/lint-ruff-D7FF64)
 ![architecture](https://img.shields.io/badge/architecture-hexagonal-6E56CF)
-![status](https://img.shields.io/badge/milestones-M0%E2%80%93M3%20done-2EA44F)
+![status](https://img.shields.io/badge/milestones-M0%E2%80%93M4%20done-2EA44F)
 
 ---
 
@@ -27,6 +27,8 @@ Every number below comes from a run on one laptop. The raw reports are in [`note
 | 108 hard crashes of the feature worker (`kill -9` style) | **0** differences; the naive approach over-counted **4.93%** ($353k) |
 | Redis killed mid-run, then a full rebuild from offset 0 | **0** differences; rebuild at **9,845** events/s |
 | Events delayed by up to 24 h, plus 1% duplicates, with 109 crashes | **0** differences against a replay of the same arrival order |
+| 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | **0** differences; up to **24,063** events/s on a laptop |
+| Publishing without a key | Final state still matches, but **67%** of features are wrong when scored |
 
 ## The idea in one picture
 
@@ -89,14 +91,15 @@ finspeq-offline export --candidate-dir models/candidates/v2-none --threads 8
 </details>
 
 <details>
-<summary><b>Run the crash and disorder drills (M2, M3)</b></summary>
+<summary><b>Run the crash, disorder and scaling drills (M2 to M4)</b></summary>
 
 ```bash
 bash scripts/m2_drills.sh    # crashes, naive counter, Redis kill, full rebuild
 bash scripts/m3_drills.sh    # delayed and duplicated events, lateness sweep
+bash scripts/m4_drills.sh    # partitions, workers, rebalances, zombie, live load
 ```
 
-Reports land in `notes/m2/` and `notes/m3/`.
+Reports land in `notes/m2/`, `notes/m3/` and `notes/m4/`.
 
 </details>
 
@@ -114,7 +117,10 @@ Reports land in `notes/m2/` and `notes/m3/`.
 4. **Recovery reads the store, not Kafka.** After a crash the worker resumes from the position in
    Redis. Kafka's own committed offset lagged by up to 150 events in the drills; trusting it would
    double-count.
-5. **Late events are welcome.** Entries are kept for 24 h plus one hour of allowed lateness, and
+5. **Ownership doesn't matter for correctness.** Several workers share the partitions; after
+   a rebalance or a stalled worker's late write, the position check makes repeats no-ops
+   ([ADR-012](docs/adr/012-partitioning-and-assignment.md)).
+6. **Late events are welcome.** Entries are kept for 24 h plus one hour of allowed lateness, and
    late events are applied, never dropped ([ADR-011](docs/adr/011-allowed-lateness.md)).
 
 The full story, with the reasoning behind each choice, is in the
@@ -128,8 +134,8 @@ The full story, with the reasoning behind each choice, is in the
 | M1 | One partition, one worker | The live store equals a replay | Done |
 | M2 | Crashes | "Effectively once" under 100+ hard crashes | Done |
 | M3 | Disorder and lateness | Exact replays with late and duplicate events; lateness chosen from data | Done |
-| M4 | Scaling out | Several partitions and workers, rebalances mid-stream | Next |
-| M5 | Hot path | Scoring API, decision ledger, the read-after-write race | Planned |
+| M4 | Scaling out | Exact state through rebalances and zombies; why the key matters | Done |
+| M5 | Hot path | Scoring API, decision ledger, the read-after-write race | Next |
 | M6 | Operations | Drift reports, dashboards, a shadow model | Optional |
 
 ## Project layout
@@ -144,7 +150,7 @@ finspeq/
 tests/           unit, contract (one suite per port, run against every adapter), integration
 scripts/         CI, data preparation, crash drills
 experiments/     the deliberately wrong naive counter used as a baseline in M2
-docs/adr/        eleven architecture decision records
+docs/adr/        twelve architecture decision records
 notes/           results of every milestone, with raw JSON reports
 ```
 
@@ -170,7 +176,7 @@ The dependency rule (domain ← application ← adapters ← bootstrap) is enfor
 | [DESIGN.md](DESIGN.md) | Goals, the core invariant, data profile, milestone plan |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Hexagonal design, SOLID, ACID analysis, failure modes |
 | [docs/adr/](docs/adr/) | Every significant decision, with context and consequences |
-| [notes/](notes/) | Measured results of M0 to M3 |
+| [notes/](notes/) | Measured results of M0 to M4 |
 
 ## Data
 

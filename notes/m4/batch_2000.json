@@ -1,0 +1,44 @@
+{
+  "consumers": [
+    {
+      "report": {
+        "batches": 374,
+        "events": 609216,
+        "applied": 609216,
+        "skipped": 0,
+        "behind": 0,
+        "busy_s": 50.57925960000284,
+        "poll_s": 23.025996800010034,
+        "apply_s": 27.533487000036985,
+        "apply_p50_ms": 71.62170000083279,
+        "apply_p99_ms": 189.76309999561636,
+        "stopped_by": "idle",
+        "events_per_second": 12044.778923572178
+      },
+      "rebalances": [
+        {
+          "at": 1795716675.474262,
+          "kind": "assign",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "at": 1795716736.0717266,
+          "kind": "revoke",
+          "partitions": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "events": 609216,
+  "events_per_second": 12044.778923572178
+}

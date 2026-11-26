@@ -1,0 +1,105 @@
+{
+  "source": "data/processed/events_sorted.parquet",
+  "time_range": {
+    "start": {
+      "epoch_s": 1772323200
+    },
+    "end": {
+      "epoch_s": 1781481600
+    }
+  },
+  "cards": {
+    "modulus": 20,
+    "remainder": 0
+  },
+  "disorder": {
+    "delayed_fraction": 0.0,
+    "mean_delay_s": 0.0,
+    "max_delay_s": 0,
+    "duplicate_fraction": 0.0,
+    "seed": 0
+  },
+  "round_robin_partitions": 4,
+  "consumer_batch_size": 500,
+  "feature_set": "v2",
+  "model_version": "2e632818a205",
+  "report": {
+    "transactions": 115720,
+    "arrivals": 115720,
+    "duplicates": 0,
+    "out_of_order": 86616,
+    "max_behind_s": 250652,
+    "card_out_of_order": 54557,
+    "card_max_behind_s": 248038,
+    "reference_rates": {
+      "flag_recall": 0.9309623430962343,
+      "flag_fpr": 0.005210693248753965,
+      "block_recall": 0.7897489539748954,
+      "block_fpr": 0.0005838067686731031
+    },
+    "points": [
+      {
+        "allowed_lateness_s": 3600,
+        "retention_factor": 1.0416666666666667,
+        "late": 82627,
+        "card_late": 50881,
+        "mismatched": 77820,
+        "mismatched_late": 54884,
+        "mismatched_card_late": 41087,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            14909
+          ],
+          [
+            "tx_count_24h",
+            77820
+          ],
+          [
+            "spend_1h",
+            14909
+          ],
+          [
+            "spend_24h",
+            77820
+          ],
+          [
+            "amount_to_mean_24h",
+            77819
+          ],
+          [
+            "amount_to_max_24h",
+            53478
+          ],
+          [
+            "secs_since_last",
+            50723
+          ],
+          [
+            "distinct_merchants_24h",
+            76959
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 1273,
+        "rates": {
+          "flag_recall": 0.9027196652719666,
+          "flag_fpr": 0.012599769962706075,
+          "block_recall": 0.696652719665272,
+          "block_fpr": 0.0012721759436757172
+        }
+      }
+    ]
+  }
+}
