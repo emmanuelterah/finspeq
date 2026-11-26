@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
-from finspeq.application.disorder import NO_DISORDER, Disorder, arrival_order
+from finspeq.application.disorder import (
+    NO_DISORDER,
+    Disorder,
+    arrival_order,
+    round_robin_consumption,
+)
 from finspeq.application.errors import InvalidMessageError
 from finspeq.application.lateness import LatenessSweep, Scoring
 from finspeq.application.messages import LabeledTransaction
@@ -159,3 +164,10 @@ def test_sweep_separates_pruning_error_from_missing_predecessors() -> None:
     assert (relaxed.late, relaxed.mismatched, relaxed.mismatched_late) == (1, 1, 0)
     assert relaxed.retention_factor == (WINDOW_SECONDS + 3_600) / WINDOW_SECONDS
     assert dict(strict.feature_mismatches)["tx_count_24h"] == 2
+
+
+def test_round_robin_consumption_interleaves_partition_batches() -> None:
+    """Send item n to partition n % 2 and consume two-item batches per partition in turn."""
+    items = history(7)
+    order = [item.seq for item in round_robin_consumption(items, partitions=2, batch_size=2)]
+    assert order == [0, 2, 1, 3, 4, 6, 5]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import heapq
 import random
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 
 from finspeq.application.errors import InvalidMessageError
@@ -76,3 +76,22 @@ def _delay(rng: random.Random, disorder: Disorder) -> int:
     if disorder.delayed_fraction == 0 or rng.random() >= disorder.delayed_fraction:
         return 0
     return min(disorder.max_delay_s, round(rng.expovariate(1.0 / disorder.mean_delay_s)))
+
+
+def round_robin_consumption(
+    items: Sequence[LabeledTransaction], partitions: int, batch_size: int
+) -> list[LabeledTransaction]:
+    """Return items in the order consumers apply them when published without a key.
+
+    Item n goes to partition n % partitions, as a round-robin producer sends it. Consumers
+    then take batch_size items from partition 0, then from partition 1, and so on, repeating
+    until every partition is empty.
+    """
+    lanes = [list(items[lane::partitions]) for lane in range(partitions)]
+    order: list[LabeledTransaction] = []
+    start = 0
+    while any(start < len(lane) for lane in lanes):
+        for lane in lanes:
+            order.extend(lane[start : start + batch_size])
+        start += batch_size
+    return order

@@ -91,6 +91,8 @@ class LatenessSweepCommand:
     lateness_values: tuple[int, ...]
     model_dir: Path | None
     output: Path
+    round_robin_partitions: int | None
+    consumer_batch_size: int
 
 
 Command = (
@@ -134,6 +136,12 @@ def parse(argv: Sequence[str]) -> Command:
     sweep.add_argument("--lateness", default=DEFAULT_LATENESS_VALUES, help="seconds, comma list")
     sweep.add_argument("--model-dir", type=Path, help="ONNX model directory; omit for features")
     sweep.add_argument("--output", type=Path, default=Path("notes/m3/lateness_sweep.json"))
+    sweep.add_argument(
+        "--round-robin-partitions",
+        type=int,
+        help="model unkeyed publishing over this many partitions (M4 experiment)",
+    )
+    sweep.add_argument("--consumer-batch-size", type=int, default=500)
     args = parser.parse_args(list(argv))
     if args.command == "build-dataset":
         return BuildDatasetCommand(
@@ -154,6 +162,8 @@ def parse(argv: Sequence[str]) -> Command:
             lateness_values=tuple(int(value) for value in args.lateness.split(",")),
             model_dir=args.model_dir,
             output=args.output,
+            round_robin_partitions=args.round_robin_partitions,
+            consumer_batch_size=args.consumer_batch_size,
         )
     return _model_command(args)
 

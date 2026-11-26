@@ -18,7 +18,7 @@ from finspeq.adapters.outbound.onnx_model import OnnxBatchScorer, OnnxExporter, 
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource, ParquetTrainingSink
 from finspeq.adapters.outbound.training_data import feature_layout, load_split
 from finspeq.application.build_dataset import BuildPlan, BuildTrainingSet, SplitBoundaries
-from finspeq.application.disorder import arrival_order
+from finspeq.application.disorder import arrival_order, round_robin_consumption
 from finspeq.application.lateness import LatenessReport, LatenessSweep, Scoring
 from finspeq.application.messages import (
     DatasetSummary,
@@ -149,7 +149,8 @@ def run_lateness_sweep(command: offline_cli.LatenessSweepCommand) -> LatenessRep
     """Run the lateness sweep over the selection and write the report to command.output.
 
     Uses the model's feature set and stored thresholds when command.model_dir is given,
-    otherwise FEATURE_SET_V2 without decisions.
+    otherwise FEATURE_SET_V2 without decisions. With round_robin_partitions set, the arrivals
+    are reordered as round_robin_consumption would apply them.
     """
     selection = command.selection
     items = [
@@ -158,6 +159,10 @@ def run_lateness_sweep(command: offline_cli.LatenessSweepCommand) -> LatenessRep
         if selection.cards.contains(item.transaction.card)
     ]
     arrivals = list(arrival_order(items, command.disorder))
+    if command.round_robin_partitions is not None:
+        arrivals = round_robin_consumption(
+            arrivals, command.round_robin_partitions, command.consumer_batch_size
+        )
     scoring = None
     feature_set = FEATURE_SET_V2
     model_version = None
@@ -175,6 +180,8 @@ def run_lateness_sweep(command: offline_cli.LatenessSweepCommand) -> LatenessRep
             "time_range": selection.time_range,
             "cards": selection.cards,
             "disorder": command.disorder,
+            "round_robin_partitions": command.round_robin_partitions,
+            "consumer_batch_size": command.consumer_batch_size,
             "feature_set": feature_set.version,
             "model_version": model_version,
             "report": report,
