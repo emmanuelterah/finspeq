@@ -210,7 +210,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 - ONNX export with `zipmap=False` and lineage metadata; parity with LightGBM within 1e-5 and a
   single-call latency benchmark (`export`).
 
-### M1: Single partition, single worker
+### M1: Single partition, single worker (done; results in notes/m1.md)
 
 - Write `docker-compose.yml` for Redpanda (`redpandadata/redpanda`) and Redis.
 - Build a simulator that replays events at N per second.

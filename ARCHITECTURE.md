@@ -137,7 +137,9 @@ class Feature(Protocol):
 | `ModelTrainer` | `train(dataset, params) -> ModelArtifact` | Same data and params give the same artifact | LightGBM |
 | `ModelExporter` | `export(artifact, path) -> ModelRef` | Writes ONNX plus metadata atomically | onnxmltools |
 | `EventPublisher` | `publish_raw(tx)`, `publish_scored(scored)` -> `EventPosition` | Returns only after a durable broker ack | Redpanda, Memory |
-| `EventSource` | `poll(max_events) -> EventBatch`; `seek(position)` | Per-partition order preserved | Redpanda, Parquet, Memory |
+| `BulkPublisher` | `publish_raw_many(txs) -> tuple[EventPosition, ...]` | Returns after every ack, positions in input order | Redpanda |
+| `EventSource` | `poll(max_events) -> EventBatch`; `seek(position)`; `acknowledge(batch)` | One partition per batch, order preserved; acknowledge is for lag only | Redpanda |
+| `HistoricalSource` | `iter_labeled(time_range) -> Iterator[LabeledTransaction]` | Canonical order enforced | Parquet, Memory |
 | `DecisionLedger` | `record(batch) -> int`; `position(partition)` | One row per tx_id; rows and position in one transaction | Postgres, Memory |
 | `TrainingSink` | `write(rows)`; `close() -> DatasetRef` | File becomes visible only when complete | Parquet |
 | `Metrics` | `observe(name, value, labels)`; `increment(...)` | Never raises | Prometheus, Null |
@@ -324,6 +326,17 @@ log write, positions stored together with state, and idempotency).
 
 ### 4.2 Atomicity
 
+- **Redis key layout** (standalone Redis; one batch touches keys of many cards):
+
+  | Key | Type | Content |
+  |---|---|---|
+  | `fq:card:{<card>}:ev` | sorted set | member tx_id, score event time; equal scores sort by tx_id |
+  | `fq:card:{<card>}:tx` | hash | field tx_id, value `time|cents|merchant` |
+  | `fq:card:{<card>}:newest` | string | newest event time seen for the card |
+  | `fq:pos:<topic>:<partition>` | string | last applied offset |
+
+  `read_window.lua` reads the sorted set and the hash in one call, so a read is one round trip
+  and one consistent snapshot.
 - **Redis, `apply_batch.lua`:** one script call per batch. Inside the script:
   1. Validate every argument. If anything is invalid, return an error before the first write.
   2. Read the stored position. Drop events at or below it.
@@ -381,6 +394,9 @@ rejected and an alarm is raised.
 - Full rebuild: `FLUSHALL`, then replay from offset 0. This requires unlimited topic retention
   (a few GB on disk).
 - **Laptop limitation (accepted):** one broker with RF=1 means losing the disk loses the log.
+- **Broker acknowledgement means fsync:** the topic is created with `write.caching=false`.
+  Redpanda's default (`true`) acknowledges `acks=all` writes before they reach disk, which would
+  let a broker crash lose acknowledged events. M2 measures the latency cost of both settings.
 
 ### 4.6 The dual-write problem and the chosen solution
 

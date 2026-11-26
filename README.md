@@ -51,6 +51,26 @@ python -m finspeq export --candidate-dir models/candidates/v2-none \
 
 Install the extra groups first: `python -m pip install -e ".[dev,data,training]"`.
 
+## M1 pipeline (streaming)
+
+Install the streaming extra: `python -m pip install -e ".[dev,data,training,streaming]"`.
+
+```bash
+docker compose up -d
+python -m finspeq simulate --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
+python -m finspeq worker --idle-exit-s 10 --metrics-port 9101
+python -m finspeq verify-state --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
+python -m finspeq verify-replay --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0 \
+    --partitions 4 --redeliver-every 7 --redis-url redis://localhost:6379/1 --flush
+```
+
+Integration tests (compose stack running; they use Redis database 15 and temporary topics):
+
+```bash
+export FINSPEQ_KAFKA_BOOTSTRAP=127.0.0.1:19092 FINSPEQ_REDIS_URL=redis://127.0.0.1:6379/0
+python -m pytest -m integration tests/contract tests/integration
+```
+
 ## Infrastructure
 
 ```bash
@@ -61,9 +81,9 @@ docker compose down                        # stop; add -v to delete the volumes
 
 | Service | Address |
 |---|---|
-| Redpanda (Kafka API) | `localhost:19092` |
+| Redpanda (Kafka API) | `127.0.0.1:19092` |
 | Redis | `localhost:6379` |
-| Postgres | `postgresql://finspeq:finspeq@localhost:5432/finspeq` |
+| Postgres | `postgresql://finspeq:finspeq@localhost:15432/finspeq` (host port: `FINSPEQ_POSTGRES_PORT`) |
 
 Copy `.env.example` to `.env` to override the settings.
 
