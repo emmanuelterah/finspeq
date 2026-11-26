@@ -10,7 +10,7 @@ class DomainError(FinspeqError):
 
 
 class InvalidCardIdError(DomainError):
-    """A card id is not 12 to 19 ASCII decimal digits."""
+    """A card id is not 8 to 19 ASCII decimal digits."""
 
 
 class InvalidTxIdError(DomainError):

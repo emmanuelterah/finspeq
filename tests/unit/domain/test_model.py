@@ -27,11 +27,16 @@ from finspeq.domain.model import (
 from tests.factories import make_tx, tx_id
 
 
-@pytest.mark.parametrize("value", ["4000", "4000a00000000002", "4" * 20, "٤" * 16])
+@pytest.mark.parametrize("value", ["4000000", "4000a00000000002", "4" * 20, "\u0664" * 16])
 def test_invalid_card_id_is_rejected(value: str) -> None:
     """Reject ids that are too short, too long, contain letters, or use non-ASCII digits."""
     with pytest.raises(InvalidCardIdError):
         CardId(value)
+
+
+def test_eleven_digit_card_id_is_accepted() -> None:
+    """Accept an 11-digit card number, which occurs in the dataset."""
+    assert CardId("60401057736").value == "60401057736"
 
 
 def test_nineteen_digit_card_id_is_accepted() -> None:

@@ -20,20 +20,20 @@ CENTS_PER_DOLLAR = 100
 MAX_ABS_LATITUDE = 90.0
 MAX_ABS_LONGITUDE = 180.0
 
-_CARD_ID_PATTERN = re.compile(r"[0-9]{12,19}")
+_CARD_ID_PATTERN = re.compile(r"[0-9]{8,19}")
 _TX_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
 
 
 @dataclass(frozen=True, slots=True)
 class CardId:
-    """Identifier of one payment card."""
+    """Primary account number of one payment card (ISO/IEC 7812: 8 to 19 digits)."""
 
     value: str
 
     def __post_init__(self) -> None:
-        """Raise InvalidCardIdError unless value is 12 to 19 ASCII decimal digits."""
+        """Raise InvalidCardIdError unless value is 8 to 19 ASCII decimal digits."""
         if _CARD_ID_PATTERN.fullmatch(self.value) is None:
-            raise InvalidCardIdError(f"card id must be 12-19 digits, got {self.value!r}")
+            raise InvalidCardIdError(f"card id must be 8-19 digits, got {self.value!r}")
 
 
 @dataclass(frozen=True, slots=True, order=True)
