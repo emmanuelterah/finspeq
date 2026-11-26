@@ -448,7 +448,7 @@ This settles open question 4 in DESIGN.md: **publish before responding.**
 | Duplicate HTTP request (client retry) | Two events with the same tx_id | ZADD dedupes by tx_id; ledger UNIQUE keeps the first | Contract tests |
 | Rebalance mid-batch | Two writers for a partition | Position check makes the zombie's writes no-ops | Replay: `FAULTS=rebalance` |
 | Producer sends without a key | Card split across partitions; order lost | Codec rejects envelopes without a key | Unit test plus an M4 demonstration |
-| Late or out-of-order event | Wrong window | Watermark with an allowed-lateness policy | Replay: `FAULTS=shuffle,delay` |
+| Late or out-of-order event | Wrong window | 1 h allowed lateness; late events applied and counted (ADR-011) | `lateness-sweep`; `verify-state` with disorder flags |
 | Redpanda unavailable on the hot path | Decision without a log entry | API returns 503 | Integration: stop the broker |
 | Model / FeatureSet version mismatch | Garbage scores | Startup check refuses to run | Unit test of bootstrap |
 | Offset gap in a partition | Silent data loss | Script rejects the batch and raises an alarm | Contract test |
@@ -515,6 +515,7 @@ the API fill it with the vector, score, decision, and model version.
 | 008 | No DI framework; manual composition roots | Accepted |
 | 009 | Drop the category feature (FEATURE_SET_V2) because of the category–time confound | Accepted |
 | 010 | Crash testing: seeded fault injection, supervisor drills, naive baseline | Accepted |
+| 011 | Allowed lateness 1 h; late events are applied, never dropped | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 
@@ -522,7 +523,7 @@ Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, conse
 
 ## 10. Open questions
 
-1. Allowed-lateness value and late-event policy (drop, side output, or correct). Decide in M3.
+1. ~~Allowed-lateness value and late-event policy.~~ Decided in M3: 1 h, apply (ADR-011).
 2. The hot path when the broker is down: 503 (current default) or fail to `REVIEW`.
 3. Async versus sync FastAPI route (M5 benchmark).
 4. JSON versus a binary envelope (`msgspec`) if serialization shows up in profiles.

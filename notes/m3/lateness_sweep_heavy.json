@@ -1,0 +1,351 @@
+{
+  "source": "data/processed/events_sorted.parquet",
+  "time_range": {
+    "start": {
+      "epoch_s": 1772323200
+    },
+    "end": {
+      "epoch_s": 1781481600
+    }
+  },
+  "cards": {
+    "modulus": 20,
+    "remainder": 0
+  },
+  "disorder": {
+    "delayed_fraction": 0.2,
+    "mean_delay_s": 3600.0,
+    "max_delay_s": 86400,
+    "duplicate_fraction": 0.01,
+    "seed": 2
+  },
+  "feature_set": "v2",
+  "model_version": "2e632818a205",
+  "report": {
+    "transactions": 115720,
+    "arrivals": 116864,
+    "duplicates": 1144,
+    "out_of_order": 22435,
+    "max_behind_s": 35947,
+    "card_out_of_order": 4590,
+    "card_max_behind_s": 24133,
+    "reference_rates": {
+      "flag_recall": 0.9309623430962343,
+      "flag_fpr": 0.005210693248753965,
+      "block_recall": 0.7897489539748954,
+      "block_fpr": 0.0005838067686731031
+    },
+    "points": [
+      {
+        "allowed_lateness_s": 0,
+        "retention_factor": 1.0,
+        "late": 22435,
+        "card_late": 4590,
+        "mismatched": 7120,
+        "mismatched_late": 1724,
+        "mismatched_card_late": 1188,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            4046
+          ],
+          [
+            "tx_count_24h",
+            7120
+          ],
+          [
+            "spend_1h",
+            4046
+          ],
+          [
+            "spend_24h",
+            7120
+          ],
+          [
+            "amount_to_mean_24h",
+            7119
+          ],
+          [
+            "amount_to_max_24h",
+            1949
+          ],
+          [
+            "secs_since_last",
+            4567
+          ],
+          [
+            "distinct_merchants_24h",
+            6572
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 46,
+        "rates": {
+          "flag_recall": 0.9299163179916318,
+          "flag_fpr": 0.005245547384197135,
+          "block_recall": 0.7792887029288703,
+          "block_fpr": 0.0005925203025338956
+        }
+      },
+      {
+        "allowed_lateness_s": 60,
+        "retention_factor": 1.0006944444444446,
+        "late": 22034,
+        "card_late": 4518,
+        "mismatched": 7108,
+        "mismatched_late": 1691,
+        "mismatched_card_late": 1173,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            4046
+          ],
+          [
+            "tx_count_24h",
+            7108
+          ],
+          [
+            "spend_1h",
+            4046
+          ],
+          [
+            "spend_24h",
+            7108
+          ],
+          [
+            "amount_to_mean_24h",
+            7107
+          ],
+          [
+            "amount_to_max_24h",
+            1946
+          ],
+          [
+            "secs_since_last",
+            4566
+          ],
+          [
+            "distinct_merchants_24h",
+            6563
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 46,
+        "rates": {
+          "flag_recall": 0.9299163179916318,
+          "flag_fpr": 0.005245547384197135,
+          "block_recall": 0.7792887029288703,
+          "block_fpr": 0.0005925203025338956
+        }
+      },
+      {
+        "allowed_lateness_s": 600,
+        "retention_factor": 1.0069444444444444,
+        "late": 18859,
+        "card_late": 3861,
+        "mismatched": 6948,
+        "mismatched_late": 1375,
+        "mismatched_card_late": 980,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            4046
+          ],
+          [
+            "tx_count_24h",
+            6948
+          ],
+          [
+            "spend_1h",
+            4046
+          ],
+          [
+            "spend_24h",
+            6948
+          ],
+          [
+            "amount_to_mean_24h",
+            6947
+          ],
+          [
+            "amount_to_max_24h",
+            1881
+          ],
+          [
+            "secs_since_last",
+            4558
+          ],
+          [
+            "distinct_merchants_24h",
+            6411
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 44,
+        "rates": {
+          "flag_recall": 0.9299163179916318,
+          "flag_fpr": 0.005236833850336343,
+          "block_recall": 0.7803347280334728,
+          "block_fpr": 0.0005925203025338956
+        }
+      },
+      {
+        "allowed_lateness_s": 3600,
+        "retention_factor": 1.0416666666666667,
+        "late": 7756,
+        "card_late": 1550,
+        "mismatched": 6396,
+        "mismatched_late": 436,
+        "mismatched_card_late": 362,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            4046
+          ],
+          [
+            "tx_count_24h",
+            6396
+          ],
+          [
+            "spend_1h",
+            4046
+          ],
+          [
+            "spend_24h",
+            6396
+          ],
+          [
+            "amount_to_mean_24h",
+            6395
+          ],
+          [
+            "amount_to_max_24h",
+            1726
+          ],
+          [
+            "secs_since_last",
+            4535
+          ],
+          [
+            "distinct_merchants_24h",
+            5888
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 43,
+        "rates": {
+          "flag_recall": 0.9309623430962343,
+          "flag_fpr": 0.005236833850336343,
+          "block_recall": 0.7813807531380753,
+          "block_fpr": 0.0005925203025338956
+        }
+      },
+      {
+        "allowed_lateness_s": 21600,
+        "retention_factor": 1.25,
+        "late": 40,
+        "card_late": 3,
+        "mismatched": 6047,
+        "mismatched_late": 0,
+        "mismatched_card_late": 0,
+        "feature_mismatches": [
+          [
+            "amount_dollars",
+            0
+          ],
+          [
+            "tx_count_1h",
+            4046
+          ],
+          [
+            "tx_count_24h",
+            6047
+          ],
+          [
+            "spend_1h",
+            4046
+          ],
+          [
+            "spend_24h",
+            6047
+          ],
+          [
+            "amount_to_mean_24h",
+            6046
+          ],
+          [
+            "amount_to_max_24h",
+            1641
+          ],
+          [
+            "secs_since_last",
+            4528
+          ],
+          [
+            "distinct_merchants_24h",
+            5564
+          ],
+          [
+            "hour_of_day_utc",
+            0
+          ],
+          [
+            "home_merchant_km",
+            0
+          ]
+        ],
+        "decision_changes": 42,
+        "rates": {
+          "flag_recall": 0.9309623430962343,
+          "flag_fpr": 0.00522812031647555,
+          "block_recall": 0.7813807531380753,
+          "block_fpr": 0.0005925203025338956
+        }
+      }
+    ]
+  }
+}

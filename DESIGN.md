@@ -224,7 +224,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 - Store the committed offset in Redis **in the same MULTI/EXEC transaction** as the state update. Restart from the stored offset ("effectively once").
 - Recovery drill: run `FLUSHALL` on Redis, rebuild from offset 0, and check that the state is identical.
 
-### M3: Disorder and lateness
+### M3: Disorder and lateness (done; results in notes/m3.md)
 
 - The simulator injects bounded shuffling and long-tail delays.
 - Implement a watermark: `max_event_time_seen - allowed_lateness`.
@@ -275,7 +275,8 @@ bootstrap) and the test layout.
 
 ## 10. Open questions
 
-1. How long should late events be allowed to arrive (allowed lateness)? Decide in M3 from the data.
+1. ~~How long should late events be allowed to arrive (allowed lateness)?~~ Decided: 1 h; late
+   events are applied (ADR-011).
 2. ~~Should `amount` live in a companion hash or in the ZSET member?~~ Decided: companion hash.
 3. Which side of the race to choose (M5): read-your-writes or measured staleness?
 4. ~~Publish before or after returning the decision?~~ Decided: before (ARCHITECTURE.md §4.6).
