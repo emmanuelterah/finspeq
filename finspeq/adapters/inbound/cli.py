@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from enum import Enum
 from pathlib import Path
 
+from finspeq.adapters.inbound import stream_cli
 from finspeq.application.messages import Imbalance, ModelArtifact, TimeRange
 from finspeq.domain.model import EventTime
 from finspeq.domain.policy import Thresholds
@@ -77,7 +78,12 @@ class ExportCommand:
 
 
 Command = (
-    BuildDatasetCommand | DatasetManifestCommand | TrainCommand | BaselinesCommand | ExportCommand
+    BuildDatasetCommand
+    | DatasetManifestCommand
+    | TrainCommand
+    | BaselinesCommand
+    | ExportCommand
+    | stream_cli.StreamCommand
 )
 FEATURE_SET_CHOICES = ("v1", "v2")
 DEFAULT_FEATURE_SET = "v2"
@@ -105,7 +111,11 @@ def parse(argv: Sequence[str]) -> Command:
     manifest = commands.add_parser("dataset-manifest", help="write DATASET.json for parts")
     manifest.add_argument("--dir", type=Path, default=DEFAULT_DATASET_DIR)
     _add_model_commands(commands)
+    stream_cli.add_commands(commands)
     args = parser.parse_args(list(argv))
+    stream_command = stream_cli.command_from(args)
+    if stream_command is not None:
+        return stream_command
     if args.command == "build-dataset":
         return BuildDatasetCommand(
             source=args.source,
