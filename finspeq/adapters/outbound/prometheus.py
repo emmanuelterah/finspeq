@@ -9,12 +9,15 @@ from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_
 from finspeq.application.ports import Metrics
 
 LATENCY_BUCKETS_MS = (0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 1_000.0)
+SECONDS_BUCKETS = (1.0, 10.0, 60.0, 300.0, 600.0, 1_800.0, 3_600.0, 21_600.0, 86_400.0)
+SECONDS_SUFFIX = "_s"
 
 
 class PrometheusMetrics(Metrics):
     """Histograms and counters in a private Prometheus registry, created on first use.
 
-    A metric's label names are fixed by its first call. Histograms use LATENCY_BUCKETS_MS.
+    A metric's label names are fixed by its first call. Histograms whose name ends in "_s" use
+    SECONDS_BUCKETS; the others use LATENCY_BUCKETS_MS.
     """
 
     def __init__(self) -> None:
@@ -32,8 +35,9 @@ class PrometheusMetrics(Metrics):
         labels = labels or {}
         histogram = self._histograms.get(name)
         if histogram is None:
+            buckets = SECONDS_BUCKETS if name.endswith(SECONDS_SUFFIX) else LATENCY_BUCKETS_MS
             histogram = Histogram(
-                name, name, sorted(labels), registry=self._registry, buckets=LATENCY_BUCKETS_MS
+                name, name, sorted(labels), registry=self._registry, buckets=buckets
             )
             self._histograms[name] = histogram
         (histogram.labels(**labels) if labels else histogram).observe(value)

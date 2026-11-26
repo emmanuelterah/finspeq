@@ -52,6 +52,22 @@ def test_apply_records_counts_and_latency() -> None:
     use_case.execute(events)
     result = use_case.execute(events)
     assert (result.applied, result.skipped) == (0, 2)
-    assert metrics.counters == {"fq_events_applied_total": 2.0, "fq_events_skipped_total": 2.0}
+    assert metrics.counters == {
+        "fq_events_applied_total": 2.0,
+        "fq_events_skipped_total": 2.0,
+        "fq_late_events_total": 0.0,
+    }
     assert metrics.observed[0][0] == "fq_apply_latency_ms"
     assert abs(metrics.observed[0][1] - 2.0) < 1e-9
+
+
+def test_apply_counts_events_behind_the_watermark() -> None:
+    """Record each event's distance behind the newest time; count those beyond the lateness."""
+    metrics = RecordingMetrics()
+    use_case = ApplyEvents(MemoryWindowStore(), metrics, TickClock(), allowed_lateness_s=60)
+    use_case.execute(batch((0, make_tx(1, BASE_TIME + 100)), (1, make_tx(2, BASE_TIME + 50))))
+    use_case.execute(batch((2, make_tx(3, BASE_TIME + 30)), (3, make_tx(4, BASE_TIME + 200))))
+    lateness = [value for name, value in metrics.observed if name == "fq_event_lateness_s"]
+    assert lateness == [50.0, 70.0]
+    assert metrics.counters["fq_late_events_total"] == 1.0
+    assert metrics.counters["fq_events_applied_total"] == 4.0
