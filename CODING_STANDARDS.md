@@ -127,6 +127,8 @@ code.
 - A function does one thing (SOLID-S). Soft limit: 30 lines of body.
 - At most 5 parameters. Group related ones into a value object.
 - No mutable default arguments.
+- No unused parameters (ruff `ARG`). When an interface passes data that some implementations
+  do not need, pass one parameter object instead (for example `FeatureContext`).
 - No boolean flag parameters that switch behavior. Write two functions instead.
 - Ports are `typing.Protocol` classes in `application/ports.py`. Adapters subclass them explicitly.
 
@@ -162,7 +164,7 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "N", "D", "UP", "B", "SIM", "ANN", "PLR", "RUF"]
+select = ["E", "W", "F", "I", "N", "D", "UP", "B", "SIM", "ANN", "ARG", "PLR", "RUF"]
 extend-select = ["D401", "W505"]
 
 [tool.ruff.lint.pydocstyle]

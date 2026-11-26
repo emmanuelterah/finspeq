@@ -83,7 +83,9 @@ The domain and application rings import no third-party package. That means no `n
 
 **Domain services** (pure functions or stateless objects):
 
-- `Feature` is a protocol: a `name`, plus `compute(tx, window) -> float`.
+- `FeatureContext` holds a transaction and its card's window, and rejects a window that belongs
+  to another card or does not end at the transaction.
+- `Feature` is a protocol: a `name`, plus `compute(context: FeatureContext) -> float`.
 - `FeatureSet` is an ordered, versioned list of `Feature`s. `compute(tx, window) -> FeatureVector`.
 - `DecisionPolicy` turns a `Score` into a `Decision` using `Thresholds`.
 
@@ -107,8 +109,8 @@ class Feature(Protocol):
 
     name: str
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return the feature value for tx given the card's window before tx."""
+    def compute(self, context: FeatureContext) -> float:
+        """Return the feature value for context.tx given context.window."""
         ...
 ```
 

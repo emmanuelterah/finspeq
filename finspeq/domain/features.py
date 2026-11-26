@@ -19,6 +19,19 @@ HOURS_PER_DAY = 24
 EARTH_RADIUS_KM = 6_371.0088
 
 
+@dataclass(frozen=True, slots=True)
+class FeatureContext:
+    """A transaction and its card's window before it: the input of every feature."""
+
+    tx: Transaction
+    window: CardWindow
+
+    def __post_init__(self) -> None:
+        """Raise InvalidWindowError unless window belongs to tx's card and ends at tx's key."""
+        if self.window.card != self.tx.card or self.window.until != self.tx.order_key:
+            raise InvalidWindowError("window must belong to tx's card and end at tx's order key")
+
+
 class Feature(Protocol):
     """One named numeric input to the fraud model."""
 
@@ -27,8 +40,8 @@ class Feature(Protocol):
         """Return the feature's column name, unique within a feature set."""
         ...
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return the feature value for tx given the card's window before tx."""
+    def compute(self, context: FeatureContext) -> float:
+        """Return the feature value for context.tx given context.window."""
         ...
 
 
@@ -48,9 +61,9 @@ class AmountDollars:
         """Return "amount_dollars"."""
         return "amount_dollars"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return tx's amount in dollars."""
-        return tx.amount.dollars
+    def compute(self, context: FeatureContext) -> float:
+        """Return the transaction amount in dollars."""
+        return context.tx.amount.dollars
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,9 +77,9 @@ class TxCount:
         """Return "tx_count_<duration>", for example "tx_count_1h"."""
         return f"tx_count_{duration_label(self.seconds)}"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
+    def compute(self, context: FeatureContext) -> float:
         """Return the number of window entries in the look-back period."""
-        return float(len(window.recent(self.seconds)))
+        return float(len(context.window.recent(self.seconds)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,9 +93,10 @@ class SpendDollars:
         """Return "spend_<duration>", for example "spend_24h"."""
         return f"spend_{duration_label(self.seconds)}"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
+    def compute(self, context: FeatureContext) -> float:
         """Return the sum of entry amounts in the look-back period, in dollars."""
-        total_cents = sum(entry.amount.cents for entry in window.recent(self.seconds))
+        entries = context.window.recent(self.seconds)
+        total_cents = sum(entry.amount.cents for entry in entries)
         return total_cents / CENTS_PER_DOLLAR
 
 
@@ -97,13 +111,13 @@ class AmountToMeanRatio:
         """Return "amount_to_mean_<duration>", for example "amount_to_mean_24h"."""
         return f"amount_to_mean_{duration_label(self.seconds)}"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
+    def compute(self, context: FeatureContext) -> float:
         """Return amount * count / total of the look-back entries, or 0.0 when there are none."""
-        entries = window.recent(self.seconds)
+        entries = context.window.recent(self.seconds)
         if not entries:
             return 0.0
         total_cents = sum(entry.amount.cents for entry in entries)
-        return (tx.amount.cents * len(entries)) / total_cents
+        return (context.tx.amount.cents * len(entries)) / total_cents
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,12 +129,12 @@ class SecondsSinceLast:
         """Return "secs_since_last"."""
         return "secs_since_last"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
+    def compute(self, context: FeatureContext) -> float:
         """Return tx time minus the last entry's time, or WINDOW_SECONDS if the window is empty."""
-        last = window.last()
+        last = context.window.last()
         if last is None:
             return float(WINDOW_SECONDS)
-        return float(tx.time.epoch_s - last.time.epoch_s)
+        return float(context.tx.time.epoch_s - last.time.epoch_s)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,9 +148,10 @@ class DistinctMerchants:
         """Return "distinct_merchants_<duration>", for example "distinct_merchants_24h"."""
         return f"distinct_merchants_{duration_label(self.seconds)}"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
+    def compute(self, context: FeatureContext) -> float:
         """Return the count of distinct merchant names in the look-back period."""
-        return float(len({entry.merchant for entry in window.recent(self.seconds)}))
+        entries = context.window.recent(self.seconds)
+        return float(len({entry.merchant for entry in entries}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,9 +163,9 @@ class HourOfDayUtc:
         """Return "hour_of_day_utc"."""
         return "hour_of_day_utc"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return the UTC hour of tx's event time, from 0 to 23."""
-        return float((tx.time.epoch_s % WINDOW_SECONDS) // SECONDS_PER_HOUR)
+    def compute(self, context: FeatureContext) -> float:
+        """Return the UTC hour of the transaction's event time, from 0 to 23."""
+        return float((context.tx.time.epoch_s % WINDOW_SECONDS) // SECONDS_PER_HOUR)
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,9 +177,9 @@ class CategoryCode:
         """Return "category_code"."""
         return "category_code"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return tx's category code (its position in Category declaration order)."""
-        return float(tx.category.code)
+    def compute(self, context: FeatureContext) -> float:
+        """Return the category code (its position in Category declaration order)."""
+        return float(context.tx.category.code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,8 +191,9 @@ class HomeMerchantDistanceKm:
         """Return "home_merchant_km"."""
         return "home_merchant_km"
 
-    def compute(self, tx: Transaction, window: CardWindow) -> float:
-        """Return the haversine distance between tx.home_point and tx.merchant_point."""
+    def compute(self, context: FeatureContext) -> float:
+        """Return the haversine distance between the home point and the merchant point."""
+        tx = context.tx
         lat1 = math.radians(tx.home_point.lat)
         lat2 = math.radians(tx.merchant_point.lat)
         d_lat = lat2 - lat1
@@ -228,9 +244,8 @@ class FeatureSet:
         Raises:
             InvalidWindowError: window belongs to another card or does not end at tx.
         """
-        if window.card != tx.card or window.until != tx.order_key:
-            raise InvalidWindowError("window must belong to tx's card and end at tx's order key")
-        values = tuple(feature.compute(tx, window) for feature in self.features)
+        context = FeatureContext(tx=tx, window=window)
+        values = tuple(feature.compute(context) for feature in self.features)
         return FeatureVector(schema=self.version, values=values)
 
 

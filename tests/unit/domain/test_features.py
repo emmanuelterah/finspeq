@@ -18,6 +18,7 @@ from finspeq.domain.features import (
     AmountToMeanRatio,
     CategoryCode,
     DistinctMerchants,
+    FeatureContext,
     FeatureSet,
     FeatureVector,
     HomeMerchantDistanceKm,
@@ -29,7 +30,7 @@ from finspeq.domain.features import (
 )
 from finspeq.domain.model import Category, GeoPoint
 from finspeq.domain.window import WINDOW_SECONDS
-from tests.factories import BASE_TIME, make_tx, window_for
+from tests.factories import BASE_TIME, OTHER_CARD, make_tx, window_for
 
 HISTORY = [
     make_tx(1, BASE_TIME - 20_000, cents=2_000, merchant="merchant_a"),
@@ -38,7 +39,8 @@ HISTORY = [
 ]
 CURRENT = make_tx(10, cents=12_000)
 WINDOW = window_for(CURRENT, HISTORY)
-EMPTY = window_for(CURRENT, [])
+CONTEXT = FeatureContext(CURRENT, WINDOW)
+EMPTY = FeatureContext(CURRENT, window_for(CURRENT, []))
 
 
 def test_duration_label_uses_hours_when_whole() -> None:
@@ -48,53 +50,53 @@ def test_duration_label_uses_hours_when_whole() -> None:
 
 def test_amount_dollars() -> None:
     """Return the current amount in dollars."""
-    assert AmountDollars().compute(CURRENT, WINDOW) == 120.0
+    assert AmountDollars().compute(CONTEXT) == 120.0
 
 
 def test_tx_count_counts_entries_in_lookback() -> None:
     """Count two entries in the last hour and three in the last day."""
-    assert TxCount(3_600).compute(CURRENT, WINDOW) == 2.0
-    assert TxCount(WINDOW_SECONDS).compute(CURRENT, WINDOW) == 3.0
+    assert TxCount(3_600).compute(CONTEXT) == 2.0
+    assert TxCount(WINDOW_SECONDS).compute(CONTEXT) == 3.0
 
 
 def test_spend_sums_amounts_in_lookback() -> None:
     """Sum 40 + 60 dollars in the last hour."""
-    assert SpendDollars(3_600).compute(CURRENT, WINDOW) == 100.0
+    assert SpendDollars(3_600).compute(CONTEXT) == 100.0
 
 
 def test_amount_to_mean_ratio() -> None:
     """Return 120 / mean(20, 40, 60) = 3.0, and 0.0 for an empty window."""
     feature = AmountToMeanRatio(WINDOW_SECONDS)
-    assert feature.compute(CURRENT, WINDOW) == 3.0
-    assert feature.compute(CURRENT, EMPTY) == 0.0
+    assert feature.compute(CONTEXT) == 3.0
+    assert feature.compute(EMPTY) == 0.0
 
 
 def test_seconds_since_last() -> None:
     """Return 600 seconds, or WINDOW_SECONDS when the window is empty."""
-    assert SecondsSinceLast().compute(CURRENT, WINDOW) == 600.0
-    assert SecondsSinceLast().compute(CURRENT, EMPTY) == float(WINDOW_SECONDS)
+    assert SecondsSinceLast().compute(CONTEXT) == 600.0
+    assert SecondsSinceLast().compute(EMPTY) == float(WINDOW_SECONDS)
 
 
 def test_distinct_merchants() -> None:
     """Count merchant_a and merchant_b once each."""
-    assert DistinctMerchants(WINDOW_SECONDS).compute(CURRENT, WINDOW) == 2.0
+    assert DistinctMerchants(WINDOW_SECONDS).compute(CONTEXT) == 2.0
 
 
 def test_hour_of_day_utc() -> None:
     """Return 15 for 1750000000 (2025-06-15 15:06:40 UTC)."""
-    assert HourOfDayUtc().compute(CURRENT, WINDOW) == 15.0
+    assert HourOfDayUtc().compute(CONTEXT) == 15.0
 
 
 def test_category_code() -> None:
     """Return the grocery_pos code."""
-    assert CategoryCode().compute(CURRENT, WINDOW) == float(Category.GROCERY_POS.code)
+    assert CategoryCode().compute(CONTEXT) == float(Category.GROCERY_POS.code)
 
 
 def test_home_merchant_distance() -> None:
     """Return 0 for identical points and about 111.2 km for one degree of latitude."""
-    assert HomeMerchantDistanceKm().compute(CURRENT, WINDOW) == 0.0
+    assert HomeMerchantDistanceKm().compute(CONTEXT) == 0.0
     moved = dataclasses.replace(CURRENT, merchant_point=GeoPoint(46.0, -90.0))
-    distance = HomeMerchantDistanceKm().compute(moved, window_for(moved, []))
+    distance = HomeMerchantDistanceKm().compute(FeatureContext(moved, window_for(moved, [])))
     assert math.isclose(distance, 111.195, abs_tol=0.01)
 
 
@@ -140,6 +142,13 @@ def test_feature_set_rejects_window_of_other_transaction() -> None:
     other = make_tx(11)
     with pytest.raises(InvalidWindowError):
         FEATURE_SET_V1.compute(other, WINDOW)
+
+
+def test_feature_context_rejects_window_of_other_card() -> None:
+    """Reject a window that belongs to a different card."""
+    other = make_tx(10, card=OTHER_CARD)
+    with pytest.raises(InvalidWindowError):
+        FeatureContext(other, WINDOW)
 
 
 def test_feature_vector_rejects_non_finite_values() -> None:
