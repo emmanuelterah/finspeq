@@ -1,7 +1,6 @@
 # Data and build outputs
 data/
-models/*.onnx
-models/*.json
+models/
 *.csv
 *.parquet
 
@@ -23,3 +22,6 @@ venv/
 ROADMAP.md
 roadmap.md
 private/
+
+# Tool scratch
+.tmp/
