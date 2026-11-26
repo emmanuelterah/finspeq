@@ -20,6 +20,8 @@ DEFAULT_BOOTSTRAP = "127.0.0.1:19092"
 DEFAULT_TOPIC = "transactions"
 DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 DEFAULT_LATENESS_S = 3_600
+ASSIGNMENT_STRATEGIES = ("range", "roundrobin", "cooperative-sticky")
+DEFAULT_MAX_POLL_INTERVAL_MS = 300_000
 LATENESS_HELP = "seconds kept beyond the 24 h window (ADR-011)"
 
 
@@ -35,6 +37,7 @@ class SimulateCommand:
     bootstrap: str
     topic: str
     linger_ms: int
+    round_robin_partitions: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +55,10 @@ class WorkerCommand:
     metrics_port: int | None
     instance_id: str | None
     faults: FaultPlan
+    assignment_strategy: str
+    max_poll_interval_ms: int
+    threads: int
+    max_batches: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +98,11 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     simulate.add_argument("--rate", type=float, default=0.0, help="events/s; 0 = unlimited")
     simulate.add_argument("--chunk-size", type=int, default=500)
     simulate.add_argument("--linger-ms", type=int, default=20)
+    simulate.add_argument(
+        "--round-robin-partitions",
+        type=int,
+        help="ignore the key and spread events over this many partitions (M4 experiment)",
+    )
     _add_broker(simulate)
     worker = commands.add_parser("worker", help="apply topic events to the Redis store")
     _add_broker(worker)
@@ -109,6 +121,14 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     worker.add_argument("--crash-point", choices=[p.value for p in CrashPoint])
     worker.add_argument("--crash-probability", type=float, default=0.0)
     worker.add_argument("--crash-seed", type=int, default=0)
+    worker.add_argument("--stall-s", type=float, default=0.0, help="sleep once after a poll")
+    worker.add_argument("--stall-at-batch", type=int, default=1, help="batch to stall after")
+    worker.add_argument(
+        "--assignment-strategy", choices=ASSIGNMENT_STRATEGIES, default=ASSIGNMENT_STRATEGIES[0]
+    )
+    worker.add_argument("--max-poll-interval-ms", type=int, default=DEFAULT_MAX_POLL_INTERVAL_MS)
+    worker.add_argument("--threads", type=int, default=1, help="consumers in this process")
+    worker.add_argument("--max-batches", type=int, help="leave the group after this many batches")
     replay = commands.add_parser("verify-replay", help="compare Redis with memory, in process")
     add_selection(replay)
     replay.add_argument("--partitions", type=int, default=4)
@@ -148,6 +168,7 @@ def _command_from(args: argparse.Namespace) -> StreamCommand | None:
             args.bootstrap,
             args.topic,
             args.linger_ms,
+            args.round_robin_partitions,
         )
     if args.command == "worker":
         return WorkerCommand(
@@ -165,7 +186,13 @@ def _command_from(args: argparse.Namespace) -> StreamCommand | None:
                 None if args.crash_point is None else CrashPoint(args.crash_point),
                 args.crash_probability,
                 args.crash_seed,
+                args.stall_s,
+                args.stall_at_batch,
             ),
+            args.assignment_strategy,
+            args.max_poll_interval_ms,
+            args.threads,
+            args.max_batches,
         )
     if args.command == "verify-replay":
         return VerifyReplayCommand(

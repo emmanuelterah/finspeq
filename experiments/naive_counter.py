@@ -101,7 +101,8 @@ def run(args: argparse.Namespace) -> int:
     consumer = Consumer(consumer_config(args.bootstrap, args.group, args.instance_id))
     consumer.subscribe([args.topic])
     point = None if args.crash_point is None else CrashPoint(args.crash_point)
-    faults = FaultInjector(FaultPlan(point, args.crash_probability, args.crash_seed), _hard_exit)
+    plan = FaultPlan(point, args.crash_probability, args.crash_seed)
+    faults = FaultInjector(plan, _hard_exit, time.sleep)
     started = last_event = time.monotonic()
     seen_event = False
     events = 0

@@ -68,6 +68,8 @@ def test_worker_applies_acknowledges_and_stops_when_idle() -> None:
     assert report.stopped_by == "idle"
     assert report.busy_s > 0
     assert report.events_per_second == report.events / report.busy_s
+    assert (report.behind, report.poll_s, report.apply_s) == (0, 2.0, 6.0)
+    assert report.apply_p50_ms == report.apply_p99_ms == 3_000.0
     assert source.acknowledged == [first, first]
     assert store.position(0) == EventPosition(0, 1)
 
@@ -96,6 +98,16 @@ def test_idle_limit_applies_only_after_the_first_event() -> None:
     assert report.events == 0
 
 
+def test_worker_leaves_after_max_batches() -> None:
+    """Stop with "max-batches" once the batch limit is reached, leaving later batches."""
+    clock = StepClock()
+    source = ListSource([batch((n, make_tx(n + 1, BASE_TIME + n))) for n in range(3)])
+    use_case = ApplyEvents(MemoryWindowStore(), NullMetrics(), clock)
+    limits = WorkerLimits(batch_size=10, max_batches=2)
+    report = FeatureWorker(source, use_case, clock, limits).run(threading.Event())
+    assert (report.batches, report.stopped_by) == (2, "max-batches")
+
+
 def test_simulate_arguments() -> None:
     """Parse the time range, slice, and rate of simulate."""
     command = stream_cli.parse(
@@ -122,6 +134,7 @@ def test_worker_and_verify_arguments() -> None:
     """Parse worker and verify-state commands with defaults."""
     worker = stream_cli.parse(["worker", "--idle-exit-s", "5"])
     assert isinstance(worker, stream_cli.WorkerCommand)
+    assert (worker.threads, worker.max_batches, worker.assignment_strategy) == (1, None, "range")
     assert worker.idle_exit_s == 5.0
     assert worker.start_timeout_s == 60.0
     state = stream_cli.parse(["verify-state", "--partitions", "4"])

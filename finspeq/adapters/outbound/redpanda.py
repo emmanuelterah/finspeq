@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from confluent_kafka import OFFSET_BEGINNING, KafkaError, Message, TopicPartition
@@ -15,6 +17,8 @@ from finspeq.domain.model import Transaction
 from finspeq.domain.scored import ScoredTransaction
 
 POLL_INTERVAL_S = 0.05
+UNASSIGNED_PARTITION = -1
+COOPERATIVE_STRATEGY = "cooperative-sticky"
 
 
 def producer_config(bootstrap: str, linger_ms: int) -> dict[str, str | int | bool]:
@@ -32,21 +36,31 @@ def producer_config(bootstrap: str, linger_ms: int) -> dict[str, str | int | boo
 
 DEFAULT_SESSION_TIMEOUT_MS = 6_000
 HEARTBEAT_INTERVAL_MS = 2_000
+DEFAULT_MAX_POLL_INTERVAL_MS = 300_000
+ASSIGNMENT_STRATEGIES = ("range", "roundrobin", "cooperative-sticky")
 
 
 def consumer_config(
-    bootstrap: str, group: str, instance_id: str | None = None
+    bootstrap: str,
+    group: str,
+    instance_id: str | None = None,
+    assignment_strategy: str = "range",
+    max_poll_interval_ms: int = DEFAULT_MAX_POLL_INTERVAL_MS,
 ) -> dict[str, str | int | bool]:
     """Return consumer settings: manual offsets, start at the beginning, committed reads, IPv4.
 
     The 6 s session timeout bounds how long a crashed member holds its partitions. With
     instance_id set, the consumer is a static member: a restart with the same id gets its
-    partitions back without waiting for the session timeout.
+    partitions back without waiting for the session timeout. assignment_strategy is one of
+    ASSIGNMENT_STRATEGIES; "cooperative-sticky" moves only the partitions that change owner.
+    A member that does not poll for max_poll_interval_ms leaves the group.
     """
     config: dict[str, str | int | bool] = {
         "bootstrap.servers": bootstrap,
         "broker.address.family": "v4",
         "group.id": group,
+        "partition.assignment.strategy": assignment_strategy,
+        "max.poll.interval.ms": max_poll_interval_ms,
         "session.timeout.ms": DEFAULT_SESSION_TIMEOUT_MS,
         "heartbeat.interval.ms": HEARTBEAT_INTERVAL_MS,
         "enable.auto.commit": False,
@@ -69,9 +83,10 @@ class ProducerLike(Protocol):
         *,
         value: bytes,
         key: bytes,
+        partition: int,
         on_delivery: Callable[[KafkaError | None, Message], None],
     ) -> None:
-        """Queue one message for delivery."""
+        """Queue one message for delivery to partition, or by key when partition is -1."""
         ...
 
     def poll(self, timeout: float) -> int:
@@ -91,12 +106,17 @@ class ConsumerLike(Protocol):
         topics: list[str],
         on_assign: Callable[[object, list[TopicPartition]], None],
         on_revoke: Callable[[object, list[TopicPartition]], None],
+        on_lost: Callable[[object, list[TopicPartition]], None],
     ) -> None:
         """Join the group for topics with assignment callbacks."""
         ...
 
     def assign(self, partitions: list[TopicPartition]) -> None:
-        """Start consuming partitions at their given offsets."""
+        """Replace the assignment with partitions at their given offsets (eager protocol)."""
+        ...
+
+    def incremental_assign(self, partitions: list[TopicPartition]) -> None:
+        """Add partitions at their given offsets to the assignment (cooperative protocol)."""
         ...
 
     def consume(self, num_messages: int, timeout: float) -> list[Message]:
@@ -119,11 +139,24 @@ class ConsumerLike(Protocol):
 class RedpandaPublisher(EventPublisher, BulkPublisher):
     """Writes transactions to one topic, keyed by card number."""
 
-    def __init__(self, producer: ProducerLike, topic: str, timeout_s: float) -> None:
-        """Create a publisher that waits up to timeout_s seconds for broker acknowledgements."""
+    def __init__(
+        self,
+        producer: ProducerLike,
+        topic: str,
+        timeout_s: float,
+        round_robin_partitions: int | None = None,
+    ) -> None:
+        """Create a publisher that waits up to timeout_s seconds for broker acknowledgements.
+
+        Messages go to the partition the producer's key partitioner chooses. With
+        round_robin_partitions set, message n of the publisher goes to partition
+        n % round_robin_partitions instead, ignoring the key (the M4 unkeyed experiment).
+        """
         self._producer = producer
         self._topic = topic
         self._timeout_s = timeout_s
+        self._round_robin_partitions = round_robin_partitions
+        self._sent = 0
 
     def publish_raw(self, tx: Transaction) -> EventPosition:
         """Append tx without a decision record and return its position after the broker ack."""
@@ -148,9 +181,16 @@ class RedpandaPublisher(EventPublisher, BulkPublisher):
         results: list[EventPosition | KafkaError | None] = [None] * len(messages)
         for index, (key, value) in enumerate(messages):
             callback = _delivery_callback(results, index)
+            partition = self._next_partition()
             while True:
                 try:
-                    self._producer.produce(self._topic, value=value, key=key, on_delivery=callback)
+                    self._producer.produce(
+                        self._topic,
+                        value=value,
+                        key=key,
+                        partition=partition,
+                        on_delivery=callback,
+                    )
                     break
                 except BufferError:
                     self._producer.poll(POLL_INTERVAL_S)
@@ -163,6 +203,46 @@ class RedpandaPublisher(EventPublisher, BulkPublisher):
             positions.append(result)
         return tuple(positions)
 
+    def _next_partition(self) -> int:
+        """Return the next round-robin partition, or -1 to let the key choose it."""
+        if self._round_robin_partitions is None:
+            return UNASSIGNED_PARTITION
+        partition = self._sent % self._round_robin_partitions
+        self._sent += 1
+        return partition
+
+
+@dataclass(frozen=True, slots=True)
+class RebalanceEvent:
+    """One change of a consumer's assignment.
+
+    Attributes:
+        at: Wall-clock time in seconds since the epoch.
+        kind: "assign", "revoke", "lost", or "poll-timeout" (this member exceeded
+            max.poll.interval.ms and left the group).
+        partitions: The partitions added or removed, in ascending order.
+    """
+
+    at: float
+    kind: str
+    partitions: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOptions:
+    """Settings of a RedpandaSource.
+
+    Attributes:
+        poll_timeout_s: Seconds poll() waits for new messages.
+        cooperative: True when the consumer uses the cooperative-sticky strategy, whose
+            callbacks receive only the partitions that change.
+        wall_clock: Timestamps rebalance events, in seconds since the epoch.
+    """
+
+    poll_timeout_s: float
+    cooperative: bool = False
+    wall_clock: Callable[[], float] = time.time
+
 
 class RedpandaSource(EventSource):
     """Reads one topic in a consumer group and starts each partition at the store's position."""
@@ -172,7 +252,7 @@ class RedpandaSource(EventSource):
         consumer: ConsumerLike,
         topic: str,
         stored_position: Callable[[int], EventPosition | None],
-        poll_timeout_s: float,
+        options: SourceOptions,
     ) -> None:
         """Create a source; call start() before poll().
 
@@ -180,18 +260,24 @@ class RedpandaSource(EventSource):
             consumer: Kafka consumer configured with consumer_config.
             topic: Topic to read.
             stored_position: Returns the last applied position of a partition, or None.
-            poll_timeout_s: Seconds poll() waits for new messages.
+            options: Poll timeout, rebalance protocol, and the clock for rebalance events.
         """
         self._consumer = consumer
         self._topic = topic
         self._stored_position = stored_position
-        self._poll_timeout_s = poll_timeout_s
+        self._poll_timeout_s = options.poll_timeout_s
+        self._cooperative = options.cooperative
+        self._wall_clock = options.wall_clock
         self._buffers: dict[int, list[Event]] = {}
+        self.rebalances: list[RebalanceEvent] = []
 
     def start(self) -> None:
         """Join the consumer group with the assignment callbacks."""
         self._consumer.subscribe(
-            [self._topic], on_assign=self._on_assign, on_revoke=self._on_revoke
+            [self._topic],
+            on_assign=self._on_assign,
+            on_revoke=self._on_revoke,
+            on_lost=self._on_lost,
         )
 
     def poll(self, max_events: int) -> EventBatch | None:
@@ -230,10 +316,16 @@ class RedpandaSource(EventSource):
     def _buffer(self, message: Message) -> None:
         """Decode message and append it to its partition's buffer.
 
+        A maximum-poll-interval error is recorded as a "poll-timeout" rebalance event and
+        skipped: the consumer rejoins the group on its next poll.
+
         Raises:
-            PortError: message carries a consumer error.
+            PortError: message carries any other consumer error.
         """
         error = message.error()
+        if isinstance(error, KafkaError) and error.code() == KafkaError._MAX_POLL_EXCEEDED:
+            self._record("poll-timeout", [])
+            return
         if error is not None:
             raise PortError(f"consumer error: {error}")
         position = position_of(message)
@@ -241,17 +333,37 @@ class RedpandaSource(EventSource):
         self._buffers.setdefault(position.partition, []).append(event)
 
     def _on_assign(self, _consumer: object, partitions: list[TopicPartition]) -> None:
-        """Start each assigned partition after its stored position, or at the beginning."""
+        """Start each assigned partition after its stored position, or at the beginning.
+
+        Under the cooperative protocol the partitions are added to the assignment; under the
+        eager protocol they replace it.
+        """
         for partition in partitions:
             stored = self._stored_position(partition.partition)
             partition.offset = OFFSET_BEGINNING if stored is None else stored.offset + 1
             self._buffers.pop(partition.partition, None)
-        self._consumer.assign(partitions)
+        self._record("assign", partitions)
+        if self._cooperative:
+            self._consumer.incremental_assign(partitions)
+        else:
+            self._consumer.assign(partitions)
 
     def _on_revoke(self, _consumer: object, partitions: list[TopicPartition]) -> None:
         """Discard buffered events of revoked partitions; their new owner reads them again."""
+        self._record("revoke", partitions)
         for partition in partitions:
             self._buffers.pop(partition.partition, None)
+
+    def _on_lost(self, _consumer: object, partitions: list[TopicPartition]) -> None:
+        """Discard buffered events of partitions lost without a revoke (session expired)."""
+        self._record("lost", partitions)
+        for partition in partitions:
+            self._buffers.pop(partition.partition, None)
+
+    def _record(self, kind: str, partitions: list[TopicPartition]) -> None:
+        """Append a RebalanceEvent of kind for partitions to self.rebalances."""
+        numbers = tuple(sorted(partition.partition for partition in partitions))
+        self.rebalances.append(RebalanceEvent(self._wall_clock(), kind, numbers))
 
 
 def _delivery_callback(

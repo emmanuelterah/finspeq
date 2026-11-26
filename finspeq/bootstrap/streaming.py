@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
 
 import redis
 from confluent_kafka import Consumer, Producer
@@ -24,8 +25,11 @@ from finspeq.adapters.outbound.parquet import ParquetHistoricalSource
 from finspeq.adapters.outbound.prometheus import PrometheusMetrics
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.adapters.outbound.redpanda import (
+    COOPERATIVE_STRATEGY,
+    RebalanceEvent,
     RedpandaPublisher,
     RedpandaSource,
+    SourceOptions,
     consumer_config,
     producer_config,
 )
@@ -53,7 +57,9 @@ CRASH_EXIT_CODE = 137
 def run_simulate(command: stream_cli.SimulateCommand) -> SimulationReport:
     """Publish the selected history to the topic and return the achieved rate."""
     producer = Producer(producer_config(command.bootstrap, command.linger_ms))
-    publisher = RedpandaPublisher(producer, command.topic, PUBLISH_TIMEOUT_S)
+    publisher = RedpandaPublisher(
+        producer, command.topic, PUBLISH_TIMEOUT_S, command.round_robin_partitions
+    )
     selection = command.selection
     plan = SimulationPlan(
         selection.time_range,
@@ -67,28 +73,91 @@ def run_simulate(command: stream_cli.SimulateCommand) -> SimulationReport:
     return ReplayHistory(source, publisher, SystemClock(), time.sleep).execute(plan)
 
 
-def run_worker(command: stream_cli.WorkerCommand) -> WorkerReport:
-    """Run the feature worker until Ctrl+C, SIGTERM, or the idle limit; return its totals."""
-    store = _redis_store(command.redis_url, command.topic, command.lateness_s)
+@dataclass(frozen=True, slots=True)
+class ConsumerRun:
+    """One consumer's totals and the rebalance events it saw."""
+
+    report: WorkerReport
+    rebalances: tuple[RebalanceEvent, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerRunReport:
+    """Totals of every consumer of one worker process.
+
+    events_per_second is the sum of events divided by the longest busy time.
+    """
+
+    consumers: tuple[ConsumerRun, ...]
+    events: int
+    events_per_second: float
+
+
+def run_worker(command: stream_cli.WorkerCommand) -> WorkerRunReport:
+    """Run command.threads consumers until Ctrl+C, SIGTERM, or the idle limit; return totals.
+
+    Each consumer has its own Kafka consumer, Redis client, and ApplyEvents, and runs in its
+    own thread. With an instance id and more than one thread, consumer i uses "<id>-<i>".
+    """
     metrics: Metrics = NullMetrics()
     if command.metrics_port is not None:
         prometheus = PrometheusMetrics()
         prometheus.serve(command.metrics_port)
         metrics = prometheus
-    consumer = Consumer(consumer_config(command.bootstrap, command.group, command.instance_id))
-    source = RedpandaSource(consumer, command.topic, store.position, POLL_TIMEOUT_S)
-    source.start()
-    clock = SystemClock()
-    limits = WorkerLimits(command.batch_size, command.idle_exit_s, command.start_timeout_s)
-    faults = FaultInjector(command.faults, _hard_exit)
-    use_case = ApplyEvents(store, metrics, clock, command.lateness_s)
-    worker = FeatureWorker(source, use_case, clock, limits, faults)
     stop = threading.Event()
     _stop_on_signals(stop)
+    runs: list[ConsumerRun | None] = [None] * command.threads
+    threads = [
+        threading.Thread(target=_run_consumer, args=(command, index, metrics, stop, runs))
+        for index in range(command.threads)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    finished = tuple(run for run in runs if run is not None)
+    events = sum(run.report.events for run in finished)
+    longest = max((run.report.busy_s for run in finished), default=0.0)
+    rate = events / longest if longest > 0 else 0.0
+    return WorkerRunReport(finished, events, rate)
+
+
+def _run_consumer(
+    command: stream_cli.WorkerCommand,
+    index: int,
+    metrics: Metrics,
+    stop: threading.Event,
+    runs: list[ConsumerRun | None],
+) -> None:
+    """Run consumer number index of command until it stops; store its result in runs[index]."""
+    store = _redis_store(command.redis_url, command.topic, command.lateness_s)
+    instance_id = command.instance_id
+    if instance_id is not None and command.threads > 1:
+        instance_id = f"{instance_id}-{index}"
+    config = consumer_config(
+        command.bootstrap,
+        command.group,
+        instance_id,
+        command.assignment_strategy,
+        command.max_poll_interval_ms,
+    )
+    cooperative = command.assignment_strategy == COOPERATIVE_STRATEGY
+    source = RedpandaSource(
+        Consumer(config), command.topic, store.position, SourceOptions(POLL_TIMEOUT_S, cooperative)
+    )
+    source.start()
+    clock = SystemClock()
+    limits = WorkerLimits(
+        command.batch_size, command.idle_exit_s, command.start_timeout_s, command.max_batches
+    )
+    faults = FaultInjector(command.faults, _hard_exit, time.sleep)
+    use_case = ApplyEvents(store, metrics, clock, command.lateness_s)
+    worker = FeatureWorker(source, use_case, clock, limits, faults)
     try:
-        return worker.run(stop)
+        report = worker.run(stop)
     finally:
         source.close()
+    runs[index] = ConsumerRun(report, tuple(source.rebalances))
 
 
 def run_verify_replay(command: stream_cli.VerifyReplayCommand) -> ReplayReport:

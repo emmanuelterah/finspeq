@@ -23,12 +23,14 @@ from confluent_kafka.cimpl import NewTopic
 
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits
 from finspeq.adapters.outbound.clock import SystemClock
+from finspeq.adapters.outbound.kafka_partitioner import key_partition
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.adapters.outbound.redpanda import (
     RedpandaPublisher,
     RedpandaSource,
+    SourceOptions,
     consumer_config,
     producer_config,
 )
@@ -82,7 +84,7 @@ def test_worker_state_matches_reference_replay(topic: str) -> None:
 
     store = RedisWindowStore(client, topic)
     consumer = Consumer(consumer_config(bootstrap, f"{topic}-group"))
-    source = RedpandaSource(consumer, topic, store.position, poll_timeout_s=0.5)
+    source = RedpandaSource(consumer, topic, store.position, SourceOptions(0.5))
     source.start()
     clock = SystemClock()
     limits = WorkerLimits(batch_size=50, idle_exit_s=5.0, start_timeout_s=60.0)
@@ -96,3 +98,14 @@ def test_worker_state_matches_reference_replay(topic: str) -> None:
 
     state = VerifyFinalState(MemoryWindowStore(), store, PARTITIONS).execute(items, 64)
     assert state.passed, state.first_mismatch
+
+
+def test_broker_partitions_match_python_murmur2(topic: str) -> None:
+    """Every keyed event lands in the partition the Python murmur2 partitioner predicts."""
+    bootstrap = os.environ["FINSPEQ_KAFKA_BOOTSTRAP"]
+    publisher = RedpandaPublisher(Producer(producer_config(bootstrap, 5)), topic, 30.0)
+    txs = [item.transaction for item in history()]
+    positions = publisher.publish_raw_many(txs)
+    predicted = [key_partition(tx.card.value.encode("ascii"), PARTITIONS) for tx in txs]
+    assert [position.partition for position in positions] == predicted
+    assert len(set(predicted)) == PARTITIONS

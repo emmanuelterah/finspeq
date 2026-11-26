@@ -12,7 +12,7 @@ pytest.importorskip("confluent_kafka")
 from confluent_kafka import OFFSET_BEGINNING, KafkaError, Message, TopicPartition
 
 from finspeq.adapters.codec import encode
-from finspeq.adapters.outbound.redpanda import RedpandaPublisher, RedpandaSource
+from finspeq.adapters.outbound.redpanda import RedpandaPublisher, RedpandaSource, SourceOptions
 from finspeq.application.errors import PortError, PublishFailedError
 from finspeq.application.messages import EventPosition
 from finspeq.domain.model import Transaction
@@ -26,7 +26,12 @@ class FakeMessage:
     """Consumed or delivered message with fixed fields."""
 
     def __init__(
-        self, partition: int, offset: int, key: bytes, value: bytes, error: str | None = None
+        self,
+        partition: int,
+        offset: int,
+        key: bytes,
+        value: bytes,
+        error: str | KafkaError | None = None,
     ) -> None:
         """Store the message fields; error is returned by error()."""
         self._fields = (partition, offset, key, value)
@@ -48,7 +53,7 @@ class FakeMessage:
         """Return the value."""
         return self._fields[3]
 
-    def error(self) -> str | None:
+    def error(self) -> str | KafkaError | None:
         """Return the stored error, or None."""
         return self._error
 
@@ -61,10 +66,14 @@ class FakeProducer:
         self._fail = fail
         self._queued: list[tuple[bytes, bytes, Callback]] = []
         self._offsets = [0, 0]
+        self.partitions: list[int] = []
 
-    def produce(self, topic: str, *, value: bytes, key: bytes, on_delivery: Callback) -> None:
-        """Queue a message."""
+    def produce(
+        self, topic: str, *, value: bytes, key: bytes, partition: int, on_delivery: Callback
+    ) -> None:
+        """Queue a message and record its requested partition."""
         assert topic == TOPIC
+        self.partitions.append(partition)
         self._queued.append((key, value, on_delivery))
 
     def poll(self, timeout: float) -> int:
@@ -89,28 +98,35 @@ class FakeConsumer:
     """Consumer that returns preset messages and records assignment, seeks, and commits."""
 
     def __init__(self, messages: list[FakeMessage]) -> None:
-        """Create a consumer that returns messages on the first consume call."""
+        """Create a consumer that returns messages when consumed."""
         self._messages = messages
         self.assigned: list[TopicPartition] = []
+        self.added: list[TopicPartition] = []
         self.commits: list[TopicPartition] = []
         self.seeks: list[TopicPartition] = []
         self.asynchronous: list[bool] = []
         self.on_assign: Callable[[object, list[TopicPartition]], None] | None = None
         self.on_revoke: Callable[[object, list[TopicPartition]], None] | None = None
+        self.on_lost: Callable[[object, list[TopicPartition]], None] | None = None
 
     def subscribe(
         self,
         topics: list[str],
         on_assign: Callable[[object, list[TopicPartition]], None],
         on_revoke: Callable[[object, list[TopicPartition]], None],
+        on_lost: Callable[[object, list[TopicPartition]], None],
     ) -> None:
         """Store the callbacks."""
         assert topics == [TOPIC]
-        self.on_assign, self.on_revoke = on_assign, on_revoke
+        self.on_assign, self.on_revoke, self.on_lost = on_assign, on_revoke, on_lost
 
     def assign(self, partitions: list[TopicPartition]) -> None:
         """Record the assignment."""
         self.assigned = partitions
+
+    def incremental_assign(self, partitions: list[TopicPartition]) -> None:
+        """Record partitions added to the assignment."""
+        self.added.extend(partitions)
 
     def consume(self, num_messages: int, timeout: float) -> list[Message]:
         """Return up to num_messages preset messages; check the timeout is non-negative."""
@@ -157,7 +173,7 @@ def test_assignment_starts_after_stored_position() -> None:
     """Start a partition after its stored offset, or at the beginning without one."""
     consumer = FakeConsumer([])
     stored = {0: EventPosition(0, 41)}
-    source = RedpandaSource(consumer, TOPIC, stored.get, poll_timeout_s=0.0)
+    source = RedpandaSource(consumer, TOPIC, stored.get, SourceOptions(0.0))
     source.start()
     assert consumer.on_assign is not None
     consumer.on_assign(consumer, [TopicPartition(TOPIC, 0), TopicPartition(TOPIC, 1)])
@@ -171,7 +187,7 @@ def test_poll_returns_one_partition_at_a_time() -> None:
         message(0, 9, make_tx(2)),
         message(1, 6, make_tx(3, card=OTHER_CARD)),
     ]
-    source = RedpandaSource(FakeConsumer(messages), TOPIC, lambda _: None, poll_timeout_s=0.0)
+    source = RedpandaSource(FakeConsumer(messages), TOPIC, lambda _: None, SourceOptions(0.0))
     first, second = source.poll(10), source.poll(10)
     assert first is not None and second is not None
     assert (first.partition, [e.position.offset for e in first.events]) == (0, [9])
@@ -182,7 +198,7 @@ def test_poll_returns_one_partition_at_a_time() -> None:
 def test_revoke_discards_buffered_events() -> None:
     """Drop the buffered events of a revoked partition and keep the others' delivered."""
     consumer = FakeConsumer([message(0, 0, make_tx(1)), message(1, 0, make_tx(2, card=OTHER_CARD))])
-    source = RedpandaSource(consumer, TOPIC, lambda _: None, poll_timeout_s=0.0)
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, SourceOptions(0.0))
     source.start()
     first = source.poll(5)
     assert first is not None and first.partition == 0
@@ -194,7 +210,7 @@ def test_revoke_discards_buffered_events() -> None:
 def test_acknowledge_commits_next_offset() -> None:
     """Commit the offset after the batch's last event."""
     consumer = FakeConsumer([])
-    source = RedpandaSource(consumer, TOPIC, lambda _: None, poll_timeout_s=0.0)
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, SourceOptions(0.0))
     source.acknowledge(batch((7, make_tx(1)), (8, make_tx(2))))
     assert [(c.partition, c.offset) for c in consumer.commits] == [(0, 9)]
     assert consumer.asynchronous == [True]
@@ -203,6 +219,49 @@ def test_acknowledge_commits_next_offset() -> None:
 def test_consumer_error_is_raised() -> None:
     """Raise PortError for a message that carries an error."""
     broken = FakeMessage(0, 0, b"k", b"v", error="broker transport failure")
-    source = RedpandaSource(FakeConsumer([broken]), TOPIC, lambda _: None, 0.0)
+    source = RedpandaSource(FakeConsumer([broken]), TOPIC, lambda _: None, SourceOptions(0.0))
     with pytest.raises(PortError):
         source.poll(1)
+
+
+def test_round_robin_publisher_ignores_the_key() -> None:
+    """Request partitions 0, 1, 2, 0 in turn with round-robin; -1 (by key) otherwise."""
+    producer = FakeProducer()
+    RedpandaPublisher(producer, TOPIC, 1.0, round_robin_partitions=3).publish_raw_many(
+        [make_tx(n) for n in range(1, 5)]
+    )
+    keyed = FakeProducer()
+    RedpandaPublisher(keyed, TOPIC, 1.0).publish_raw_many([make_tx(1), make_tx(2)])
+    assert producer.partitions == [0, 1, 2, 0]
+    assert keyed.partitions == [-1, -1]
+
+
+def test_cooperative_assignment_adds_partitions_and_logs_rebalances() -> None:
+    """Add partitions incrementally under the cooperative protocol and record each change."""
+    consumer = FakeConsumer([])
+    times = iter([10.0, 11.5, 12.0])
+    options = SourceOptions(0.0, cooperative=True, wall_clock=lambda: next(times))
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, options)
+    source.start()
+    assert consumer.on_assign and consumer.on_revoke and consumer.on_lost
+    consumer.on_assign(consumer, [TopicPartition(TOPIC, 2), TopicPartition(TOPIC, 0)])
+    consumer.on_revoke(consumer, [TopicPartition(TOPIC, 2)])
+    consumer.on_lost(consumer, [TopicPartition(TOPIC, 0)])
+    assert [p.partition for p in consumer.added] == [2, 0]
+    assert consumer.assigned == []
+    assert [(e.at, e.kind, e.partitions) for e in source.rebalances] == [
+        (10.0, "assign", (0, 2)),
+        (11.5, "revoke", (2,)),
+        (12.0, "lost", (0,)),
+    ]
+
+
+def test_poll_timeout_is_recorded_not_raised() -> None:
+    """Record a maximum-poll-interval error as a rebalance event and keep polling."""
+    timeout = FakeMessage(0, 0, b"", b"", error=KafkaError(KafkaError._MAX_POLL_EXCEEDED))
+    consumer = FakeConsumer([timeout, message(0, 0, make_tx(1))])
+    options = SourceOptions(0.0, wall_clock=lambda: 5.0)
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, options)
+    polled = source.poll(10)
+    assert polled is not None and len(polled.events) == 1
+    assert [(e.kind, e.partitions) for e in source.rebalances] == [("poll-timeout", ())]

@@ -26,9 +26,14 @@ def crash() -> None:
     raise SimulatedCrashError
 
 
+def no_sleep(seconds: float) -> None:
+    """Fail the test: these plans must never stall."""
+    raise AssertionError(f"unexpected stall of {seconds} s")
+
+
 def crash_index(plan: FaultPlan, checkpoints: int) -> int | None:
     """Return the 1-based checkpoint at which plan crashes, or None within checkpoints."""
-    injector = FaultInjector(plan, crash)
+    injector = FaultInjector(plan, crash, no_sleep)
     for index in range(1, checkpoints + 1):
         try:
             injector.checkpoint(CrashPoint.AFTER_APPLY)
@@ -47,7 +52,7 @@ def test_same_seed_crashes_at_the_same_checkpoint() -> None:
 
 def test_other_points_and_zero_probability_never_crash() -> None:
     """Never crash at a point other than the plan's, or with probability 0."""
-    injector = FaultInjector(FaultPlan(CrashPoint.AFTER_POLL, 1.0, 1), crash)
+    injector = FaultInjector(FaultPlan(CrashPoint.AFTER_POLL, 1.0, 1), crash, no_sleep)
     injector.checkpoint(CrashPoint.AFTER_APPLY)
     injector.checkpoint(CrashPoint.AFTER_ACK)
     assert injector.checkpoints == 0
@@ -64,7 +69,7 @@ def run_until_crash(point: CrashPoint) -> tuple[MemoryWindowStore, ListSource]:
         ApplyEvents(store, NullMetrics(), clock),
         clock,
         WorkerLimits(batch_size=10, idle_exit_s=1.0),
-        FaultInjector(FaultPlan(point, 1.0, 0), crash),
+        FaultInjector(FaultPlan(point, 1.0, 0), crash, no_sleep),
     )
     with pytest.raises(SimulatedCrashError):
         worker.run(threading.Event())
@@ -98,6 +103,24 @@ def test_redelivery_after_crash_changes_nothing() -> None:
     replay: EventBatch = batch((0, make_tx(1, BASE_TIME)), (1, make_tx(2, BASE_TIME + 1)))
     result = store.apply(replay)
     assert (result.applied, result.skipped) == (0, 2)
+
+
+def test_stall_happens_once_after_the_chosen_poll() -> None:
+    """Sleep stall_s once, at the AFTER_POLL checkpoint of batch stall_at_batch."""
+    sleeps: list[float] = []
+    injector = FaultInjector(FaultPlan(stall_s=12.0, stall_at_batch=2), crash, sleeps.append)
+    for _ in range(4):
+        injector.checkpoint(CrashPoint.AFTER_POLL)
+        injector.checkpoint(CrashPoint.AFTER_APPLY)
+    assert sleeps == [12.0]
+
+
+def test_consumer_config_sets_strategy_and_poll_interval() -> None:
+    """Pass the assignment strategy and the maximum poll interval through."""
+    config = consumer_config("127.0.0.1:19092", "g", None, "cooperative-sticky", 10_000)
+    assert config["partition.assignment.strategy"] == "cooperative-sticky"
+    assert config["max.poll.interval.ms"] == 10_000
+    assert consumer_config("127.0.0.1:19092", "g")["partition.assignment.strategy"] == "range"
 
 
 def test_consumer_config_sets_session_timeout_and_static_membership() -> None:
