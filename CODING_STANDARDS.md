@@ -128,7 +128,9 @@ code.
 - At most 5 parameters. Group related ones into a value object.
 - No mutable default arguments.
 - No unused parameters (ruff `ARG`). When an interface passes data that some implementations
-  do not need, pass one parameter object instead (for example `FeatureContext`).
+  do not need, pass one parameter object instead (for example `FeatureContext`). The one
+  exception is a callback whose signature a third-party library fixes; name its unused parameters
+  with a leading underscore (for example `_consumer`).
 - No boolean flag parameters that switch behavior. Write two functions instead.
 - Ports are `typing.Protocol` classes in `application/ports.py`. Adapters subclass them explicitly.
 
