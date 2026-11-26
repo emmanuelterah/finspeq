@@ -202,7 +202,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 ### M0: Offline baseline (done; results in notes/m0.md)
 
 - Canonical event file and data-quality report: `scripts/sort_events.py`, `scripts/data_quality.py`.
-- Training set built month by month with a 24-hour warm-up (`python -m finspeq build-dataset`);
+- Training set built month by month with a 24-hour warm-up (`finspeq-offline build-dataset`);
   a test proves the result equals a single pass.
 - LightGBM with early stopping on validation PR-AUC; rule and logistic baselines
   (`train`, `baselines`).

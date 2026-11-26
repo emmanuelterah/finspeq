@@ -185,15 +185,15 @@ Redis with faults injected, then compares per-event vectors, final state, and de
 
 ### 2.6 Composition roots
 
-`bootstrap.py` has one function per process. Each function reads settings, builds the adapters,
-builds the use cases, and returns the runnable process. There is no DI framework.
+`finspeq/bootstrap/` has one module per process. Each module imports, at the top, only the
+adapters its process wires, so a process never loads another process's libraries. There is no DI
+framework.
 
-| Function | Process | Wires |
+| Module | Console command | Wires |
 |---|---|---|
-| `build_api()` | FastAPI app | RedisWindowStore (as a reader), OnnxFraudModel, RedpandaPublisher |
-| `build_feature_worker()` | consumer | RedpandaSource, RedisWindowStore (as a writer) |
-| `build_ledger_worker()` | consumer | RedpandaSource, PostgresLedger |
-| `build_offline()` | CLI | ParquetSource, MemoryWindowStore, ParquetSink, LightGBM, exporter |
+| `offline.py` | `finspeq-offline` | Parquet source and sink, MemoryWindowStore, LightGBM, ONNX exporter, baselines |
+| `streaming.py` | `finspeq-stream` | RedpandaPublisher, RedpandaSource, RedisWindowStore, Prometheus metrics |
+| `serving.py` (M5) | `finspeq-serve` | RedisWindowStore (as a reader), OnnxFraudModel, RedpandaPublisher |
 
 At startup each root checks that `FraudModel.schema == FeatureSet.version`, and refuses to start
 on a mismatch.
@@ -237,7 +237,7 @@ finspeq/
 │       ├── prometheus.py
 │       └── clock.py
 ├── settings.py             # pydantic-settings; imported by bootstrap only
-└── bootstrap.py
+└── bootstrap/            # offline.py, streaming.py: one composition root per process
 tests/
 ├── unit/                   # domain + application with memory adapters, no containers
 ├── contract/               # one suite per port, parametrized over every adapter

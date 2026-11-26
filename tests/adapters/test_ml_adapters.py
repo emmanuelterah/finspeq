@@ -13,6 +13,9 @@ pytest.importorskip("onnxruntime")
 pytest.importorskip("onnxmltools")
 pytest.importorskip("sklearn")
 
+import lightgbm as lgb
+import numpy as np
+
 from finspeq.adapters.outbound.baselines import LogisticBaselineScorer, RuleBaselineScorer
 from finspeq.adapters.outbound.dataset_manifest import dataset_ref, write_manifest
 from finspeq.adapters.outbound.lightgbm_model import LightGBMScorer, LightGBMTrainer
@@ -118,9 +121,6 @@ def test_float32_exact_model_keeps_lightgbm_predictions(
     dataset: DatasetRef, tmp_path: Path
 ) -> None:
     """Predict identically with the rewritten model on float32 inputs; store float32 thresholds."""
-    import lightgbm as lgb
-    import numpy as np
-
     artifact = LightGBMTrainer().train(dataset, PARAMS, str(tmp_path / "model"))
     text = Path(artifact.path).read_text(encoding="utf-8")
     rewritten = float32_exact_model(text)
@@ -137,8 +137,6 @@ def test_float32_exact_model_keeps_lightgbm_predictions(
 
 def test_float32_exact_model_rounds_thresholds_down() -> None:
     """Replace a threshold between two float32 values by the lower one."""
-    import numpy as np
-
     upper = np.float32(100.1)
     lower = np.nextafter(upper, np.float32(0))
     midpoint = (float(lower) + float(upper)) / 2

@@ -42,10 +42,10 @@ Extra dependency groups: `training` (LightGBM, ONNX), `serving` (FastAPI, ONNX R
 ```bash
 python scripts/sort_events.py          # canonical event file + events_sorted.manifest.json
 python scripts/data_quality.py         # notes/data_quality.md
-python -m finspeq build-dataset --feature-set v2 --jobs 8
-python -m finspeq baselines --dataset-dir data/processed/training_v2
-python -m finspeq train --dataset-dir data/processed/training_v2 --name v2-none --threads 8
-python -m finspeq export --candidate-dir models/candidates/v2-none \
+finspeq-offline build-dataset --feature-set v2 --jobs 8
+finspeq-offline baselines --dataset-dir data/processed/training_v2
+finspeq-offline train --dataset-dir data/processed/training_v2 --name v2-none --threads 8
+finspeq-offline export --candidate-dir models/candidates/v2-none \
     --dataset-dir data/processed/training_v2 --threads 8
 ```
 
@@ -57,10 +57,10 @@ Install the streaming extra: `python -m pip install -e ".[dev,data,training,stre
 
 ```bash
 docker compose up -d
-python -m finspeq simulate --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
-python -m finspeq worker --idle-exit-s 10 --metrics-port 9101
-python -m finspeq verify-state --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
-python -m finspeq verify-replay --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0 \
+finspeq-stream simulate --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
+finspeq-stream worker --idle-exit-s 10 --metrics-port 9101
+finspeq-stream verify-state --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0
+finspeq-stream verify-replay --from-date 2026-03-01 --to-date 2026-06-15 --slice 20:0 \
     --partitions 4 --redeliver-every 7 --redis-url redis://localhost:6379/1 --flush
 ```
 
@@ -94,7 +94,7 @@ finspeq/
   domain/        value objects, window, features, policy (standard library only)
   application/   ports (Protocols), messages, use cases
   adapters/      inbound (HTTP, workers, CLI) and outbound (Redis, Kafka, ONNX, ...)
-  bootstrap.py   composition roots
+  bootstrap/     composition roots: offline.py, streaming.py (one per process)
 tests/
   unit/          domain and application, no containers
   contract/      one suite per port, parametrized over adapters

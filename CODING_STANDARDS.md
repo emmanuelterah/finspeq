@@ -108,7 +108,10 @@ code.
 
 - `domain` and `application` import only the standard library and inner rings.
 - Adapters do not import other adapters, except the shared `adapters/codec.py`.
-- Only `bootstrap.py` constructs adapters.
+- Only the composition roots in `finspeq/bootstrap/` construct adapters.
+- Every import is at the top of its module (ruff `PLC0415`): no imports inside functions and no
+  `TYPE_CHECKING` blocks. A process that must not load a library gets its own composition root
+  (`bootstrap/offline.py`, `bootstrap/streaming.py`) instead of a deferred import.
 - No module-level side effects: no connections, file reads, or model loads at import time.
 - No global mutable state. Pass dependencies through `__init__`.
 - Read time through the `Clock` port. Never call `time.time()` in the core.

@@ -7,10 +7,16 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
+import fakeredis
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
+import redis
 
 from finspeq.adapters.outbound.memory_history import MemoryHistoricalSource, MemoryTrainingSink
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
+from finspeq.adapters.outbound.parquet import ParquetHistoricalSource, ParquetTrainingSink
+from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.application.messages import LabeledTransaction, Split, TrainingRow
 from finspeq.application.ports import HistoricalSource, TrainingSink, WindowStore
 from finspeq.domain.features import FeatureVector
@@ -34,9 +40,6 @@ def _memory_store(allowed_lateness_s: int) -> WindowStore:
 
 def _fake_redis_store(allowed_lateness_s: int) -> WindowStore:
     """Return a RedisWindowStore over a new, empty in-process fakeredis server."""
-    fakeredis = pytest.importorskip("fakeredis")
-    from finspeq.adapters.outbound.redis_window import RedisWindowStore
-
     return RedisWindowStore(fakeredis.FakeRedis(), TEST_TOPIC, allowed_lateness_s)
 
 
@@ -45,10 +48,6 @@ def _live_redis_store(allowed_lateness_s: int) -> WindowStore:
     url = os.environ.get(LIVE_REDIS_ENV)
     if not url:
         pytest.skip(f"{LIVE_REDIS_ENV} is not set")
-    redis = pytest.importorskip("redis")
-
-    from finspeq.adapters.outbound.redis_window import RedisWindowStore
-
     client = redis.Redis.from_url(url, db=LIVE_REDIS_DB)
     client.flushdb()
     return RedisWindowStore(client, TEST_TOPIC, allowed_lateness_s)
@@ -73,8 +72,6 @@ def make_source(request: pytest.FixtureRequest, tmp_path: Path) -> SourceFactory
     """Return a factory that builds the parametrized HistoricalSource over given items."""
     if request.param == "memory":
         return MemoryHistoricalSource
-    pytest.importorskip("pyarrow")
-    from finspeq.adapters.outbound.parquet import ParquetHistoricalSource
 
     def factory(items: Sequence[LabeledTransaction]) -> HistoricalSource:
         """Write items to an event Parquet file and return a source over it."""
@@ -87,9 +84,6 @@ def make_source(request: pytest.FixtureRequest, tmp_path: Path) -> SourceFactory
 
 def _write_events(path: Path, items: Sequence[LabeledTransaction]) -> None:
     """Write items in the column layout produced by scripts/sort_events.py."""
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
     txs = [item.transaction for item in items]
     columns = {
         "seq": [item.seq for item in items],
@@ -145,14 +139,10 @@ class _ParquetSinkHarness:
 
     def create(self) -> TrainingSink:
         """Return a new ParquetTrainingSink."""
-        from finspeq.adapters.outbound.parquet import ParquetTrainingSink
-
         return ParquetTrainingSink(self._path, SINK_SCHEMA, SINK_FEATURES, rows_per_group=2)
 
     def read_back(self) -> list[TrainingRow]:
         """Return the rows stored in the final file, or none if it does not exist yet."""
-        import pyarrow.parquet as pq
-
         if not self._path.exists():
             return []
         data = pq.read_table(self._path).to_pydict()
@@ -174,5 +164,4 @@ def sink_harness(request: pytest.FixtureRequest, tmp_path: Path) -> SinkHarness:
     """Return the harness for the parametrized TrainingSink adapter."""
     if request.param == "memory":
         return _MemorySinkHarness()
-    pytest.importorskip("pyarrow")
     return _ParquetSinkHarness(tmp_path)

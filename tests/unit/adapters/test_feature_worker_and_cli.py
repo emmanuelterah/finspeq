@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import threading
 
-from finspeq.adapters.inbound import cli, stream_cli
+import pytest
+
+from finspeq.adapters.inbound import stream_cli
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
@@ -93,7 +97,7 @@ def test_idle_limit_applies_only_after_the_first_event() -> None:
 
 def test_simulate_arguments() -> None:
     """Parse the time range, slice, and rate of simulate."""
-    command = cli.parse(
+    command = stream_cli.parse(
         [
             "simulate",
             "--from-date",
@@ -115,26 +119,27 @@ def test_simulate_arguments() -> None:
 
 def test_worker_and_verify_arguments() -> None:
     """Parse worker and verify-state commands with defaults."""
-    worker = cli.parse(["worker", "--idle-exit-s", "5"])
+    worker = stream_cli.parse(["worker", "--idle-exit-s", "5"])
     assert isinstance(worker, stream_cli.WorkerCommand)
     assert worker.idle_exit_s == 5.0
     assert worker.start_timeout_s == 60.0
-    state = cli.parse(["verify-state", "--partitions", "4"])
+    state = stream_cli.parse(["verify-state", "--partitions", "4"])
     assert isinstance(state, stream_cli.VerifyStateCommand)
     assert state.selection.time_range is None
     assert state.partitions == 4
 
 
-def test_bootstrap_imports_without_streaming_libraries() -> None:
-    """Import bootstrap without loading confluent_kafka, redis, or prometheus_client."""
-    import subprocess
-    import sys
+OFFLINE_ONLY = ("lightgbm", "onnxruntime", "onnxmltools", "sklearn")
+STREAMING_ONLY = ("confluent_kafka", "redis", "prometheus_client")
 
-    code = (
-        "import sys, finspeq.bootstrap; "
-        "print(sorted(m for m in ('confluent_kafka', 'redis', 'prometheus_client') "
-        "if m in sys.modules))"
-    )
+
+@pytest.mark.parametrize(
+    ("root", "absent"),
+    [("finspeq.bootstrap.offline", STREAMING_ONLY), ("finspeq.bootstrap.streaming", OFFLINE_ONLY)],
+)
+def test_composition_roots_load_only_their_libraries(root: str, absent: tuple[str, ...]) -> None:
+    """Import each composition root alone and find none of the other process's libraries."""
+    code = f"import sys, {root}; print(sorted(m for m in {absent!r} if m in sys.modules))"
     output = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     ).stdout

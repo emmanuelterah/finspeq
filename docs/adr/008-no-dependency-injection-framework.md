@@ -9,9 +9,9 @@ Use cases receive their ports through constructors. A container library could wi
 
 ## Decision
 
-Wire adapters into use cases by hand in `bootstrap.py`, one function per process.
+Wire adapters into use cases by hand in `finspeq/bootstrap/`, one module per process.
 
 ## Consequences
 
 - Wiring is plain, type-checked Python that is easy to read and debug.
-- Wiring changes are edits to bootstrap.py.
+- Wiring changes are edits to the composition root of the affected process.

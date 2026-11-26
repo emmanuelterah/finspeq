@@ -19,4 +19,5 @@ rings, and forbids third-party imports in the domain and application rings.
 
 - The domain and use cases run in unit tests with memory adapters, in milliseconds.
 - Every port has a contract suite that every adapter must pass.
-- Composition happens in `bootstrap.py` only, which adds some wiring code.
+- Composition happens only in `finspeq/bootstrap/`, one module per process, which adds some
+  wiring code.

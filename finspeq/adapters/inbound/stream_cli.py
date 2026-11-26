@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -121,8 +122,18 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     state.add_argument("--lateness-s", type=int, default=0)
 
 
-def command_from(args: argparse.Namespace) -> StreamCommand | None:
-    """Return the streaming command described by args, or None for other commands."""
+def parse(argv: Sequence[str]) -> StreamCommand:
+    """Return the streaming command described by argv; exit with status 2 on invalid arguments."""
+    parser = argparse.ArgumentParser(prog="finspeq-stream")
+    add_commands(parser.add_subparsers(dest="command", required=True))
+    command = _command_from(parser.parse_args(list(argv)))
+    if command is None:
+        parser.error(f"unknown command {argv[0] if argv else ''}")
+    return command
+
+
+def _command_from(args: argparse.Namespace) -> StreamCommand | None:
+    """Return the streaming command described by args, or None for an unknown command."""
     if args.command == "simulate":
         return SimulateCommand(
             _selection(args),

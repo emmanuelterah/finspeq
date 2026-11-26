@@ -1,18 +1,15 @@
-"""Command-line interface: argument parsing and result rendering for offline jobs."""
+"""Command-line arguments of the offline commands: dataset, training, baselines, export."""
 
 from __future__ import annotations
 
 import argparse
 import calendar
-import dataclasses
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
-from enum import Enum
 from pathlib import Path
 
-from finspeq.adapters.inbound import stream_cli
 from finspeq.application.messages import Imbalance, ModelArtifact, TimeRange
 from finspeq.domain.model import EventTime
 from finspeq.domain.policy import Thresholds
@@ -78,12 +75,7 @@ class ExportCommand:
 
 
 Command = (
-    BuildDatasetCommand
-    | DatasetManifestCommand
-    | TrainCommand
-    | BaselinesCommand
-    | ExportCommand
-    | stream_cli.StreamCommand
+    BuildDatasetCommand | DatasetManifestCommand | TrainCommand | BaselinesCommand | ExportCommand
 )
 FEATURE_SET_CHOICES = ("v1", "v2")
 DEFAULT_FEATURE_SET = "v2"
@@ -97,7 +89,7 @@ def dataset_dir_for(feature_set: str) -> Path:
 
 def parse(argv: Sequence[str]) -> Command:
     """Return the command described by argv; exit with status 2 on invalid arguments."""
-    parser = argparse.ArgumentParser(prog="finspeq")
+    parser = argparse.ArgumentParser(prog="finspeq-offline")
     commands = parser.add_subparsers(dest="command", required=True)
     build = commands.add_parser("build-dataset", help="build training-set parts, one per month")
     build.add_argument("--source", type=Path, default=Path("data/processed/events_sorted.parquet"))
@@ -111,11 +103,7 @@ def parse(argv: Sequence[str]) -> Command:
     manifest = commands.add_parser("dataset-manifest", help="write DATASET.json for parts")
     manifest.add_argument("--dir", type=Path, default=DEFAULT_DATASET_DIR)
     _add_model_commands(commands)
-    stream_cli.add_commands(commands)
     args = parser.parse_args(list(argv))
-    stream_command = stream_cli.command_from(args)
-    if stream_command is not None:
-        return stream_command
     if args.command == "build-dataset":
         return BuildDatasetCommand(
             source=args.source,
@@ -180,34 +168,6 @@ def _model_command(args: argparse.Namespace) -> Command:
     )
 
 
-def to_plain(value: object) -> object:
-    """Return value as JSON-compatible data.
-
-    Dataclasses become dicts of their fields and public properties, enums become their
-    values, and tuples become lists.
-    """
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        plain = {f.name: to_plain(getattr(value, f.name)) for f in dataclasses.fields(value)}
-        for name, attribute in vars(type(value)).items():
-            if isinstance(attribute, property) and not name.startswith("_"):
-                plain[name] = to_plain(getattr(value, name))
-        return plain
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, tuple | list):
-        return [to_plain(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): to_plain(item) for key, item in value.items()}
-    return value
-
-
-def write_json(path: Path, payload: object) -> None:
-    """Write payload, converted with to_plain, to path as indented JSON with LF line endings."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(to_plain(payload), indent=2) + "\n"
-    path.write_text(text, encoding="utf-8", newline="\n")
-
-
 def read_candidate(path: Path) -> tuple[ModelArtifact, Thresholds]:
     """Return the model artifact and selected thresholds stored in a candidate report.json."""
     report = json.loads(path.read_text(encoding="utf-8"))["report"]
@@ -245,11 +205,6 @@ def month_label(month: TimeRange) -> str:
     """Return "YYYY-MM" of the month that contains month.start (UTC)."""
     year, month_number = _year_month(month.start)
     return f"{year:04d}-{month_number:02d}"
-
-
-def render(result: object) -> str:
-    """Return result, converted with to_plain, as indented JSON."""
-    return json.dumps(to_plain(result), indent=2)
 
 
 def _parse_month(text: str) -> date:
