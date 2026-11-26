@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Protocol
 
 from finspeq.application.messages import (
@@ -106,6 +106,18 @@ class EventPublisher(Protocol):
         ...
 
 
+class BulkPublisher(Protocol):
+    """Writer of many raw transactions to the event log."""
+
+    def publish_raw_many(self, txs: Sequence[Transaction]) -> tuple[EventPosition, ...]:
+        """Append txs in order and return their positions after every broker ack.
+
+        Raises:
+            PublishFailedError: The broker did not acknowledge at least one transaction.
+        """
+        ...
+
+
 class EventSource(Protocol):
     """Reader of log events, one single-partition batch at a time."""
 
@@ -115,6 +127,10 @@ class EventSource(Protocol):
 
     def seek(self, position: EventPosition) -> None:
         """Make the next read of position.partition start at position.offset."""
+        ...
+
+    def acknowledge(self, batch: EventBatch) -> None:
+        """Record that batch was applied; used for lag reporting, never for recovery."""
         ...
 
 

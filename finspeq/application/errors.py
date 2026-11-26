@@ -19,6 +19,10 @@ class PublishFailedError(PortError):
     """The broker did not acknowledge a published event."""
 
 
+class CodecError(PortError):
+    """A log record cannot be encoded or decoded."""
+
+
 class PositionGapError(PortError):
     """A batch's unapplied offsets do not continue directly from the stored position."""
 
