@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from finspeq.adapters.outbound.memory_history import MemoryHistoricalSource
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
+from finspeq.application.disorder import NO_DISORDER, Disorder, arrival_order
 from finspeq.application.messages import EventPosition, LabeledTransaction
 from finspeq.application.replay import ALL_CARDS, CardSlice, card_bucket, partitioned_batches
 from finspeq.application.simulate import ReplayHistory, SimulationPlan
@@ -62,7 +63,7 @@ def test_replay_paces_chunks_to_the_target_rate() -> None:
     """Sleep 2 s after each 10-transaction chunk at 5 transactions per second."""
     clock, publisher = ManualClock(), ListPublisher()
     use_case = ReplayHistory(MemoryHistoricalSource(history(30)), publisher, clock, clock.sleep)
-    report = use_case.execute(SimulationPlan(None, ALL_CARDS, None, rate=5.0, chunk_size=10))
+    report = use_case.execute(SimulationPlan(None, ALL_CARDS, None, 5.0, 10, NO_DISORDER))
     assert [len(c) for c in publisher.chunks] == [10, 10, 10]
     assert clock.sleeps == [2.0, 2.0, 2.0]
     assert (report.events, report.chunks, report.events_per_second) == (30, 3, 5.0)
@@ -78,7 +79,7 @@ def test_replay_applies_slice_and_limit() -> None:
     publisher = ListPublisher()
     clock = ManualClock()
     use_case = ReplayHistory(MemoryHistoricalSource(history(40)), publisher, clock, clock.sleep)
-    report = use_case.execute(SimulationPlan(None, cards, limit=7, rate=0.0, chunk_size=3))
+    report = use_case.execute(SimulationPlan(None, cards, 7, 0.0, 3, NO_DISORDER))
     published = [tx for chunk in publisher.chunks for tx in chunk]
     assert published == [i.transaction for i in wanted][:7]
     assert report.events == 7
@@ -105,3 +106,36 @@ def test_final_state_detects_missing_events() -> None:
     report = VerifyFinalState(MemoryWindowStore(), candidate, partitions=1).execute(items, 10)
     assert not report.passed
     assert report.window_mismatches == 2
+
+
+def test_replay_publishes_the_seeded_arrival_order() -> None:
+    """With disorder, the published transactions are the arrival order, duplicates included."""
+    disorder = Disorder(0.5, 30.0, 300, 0.2, seed=3)
+    items = history(60)
+    publisher, clock = ListPublisher(), ManualClock()
+    use_case = ReplayHistory(MemoryHistoricalSource(items), publisher, clock, clock.sleep)
+    report = use_case.execute(SimulationPlan(None, ALL_CARDS, None, 0.0, 7, disorder))
+    published = [tx for chunk in publisher.chunks for tx in chunk]
+    assert published == [i.transaction for i in arrival_order(items, disorder)]
+    assert report.events == len(published) > len(items)
+
+
+def test_final_state_is_independent_of_batching_under_disorder() -> None:
+    """A store filled with the arrival order in other batch sizes matches the reference.
+
+    Events are 30 minutes apart over about four days, so late events and pruning both occur.
+    """
+    disorder = Disorder(0.5, 3_600.0, 14_400, 0.2, seed=5)
+    items = [
+        LabeledTransaction(i, make_tx(i + 1, BASE_TIME + i * 1_800, card=card), is_fraud=False)
+        for i, card in enumerate(["4000000000000002", OTHER_CARD] * 100)
+    ]
+    arrivals = list(arrival_order(items, disorder))
+    assert arrivals != items
+    candidate = MemoryWindowStore(allowed_lateness_s=60)
+    for batch in partitioned_batches(arrivals, partitions=1, batch_size=13):
+        candidate.apply(batch)
+    reference = MemoryWindowStore(allowed_lateness_s=60)
+    report = VerifyFinalState(reference, candidate, partitions=1).execute(arrivals, 4)
+    assert report.passed
+    assert report.events == len(arrivals)

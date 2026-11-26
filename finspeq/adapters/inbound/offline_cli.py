@@ -1,4 +1,4 @@
-"""Command-line arguments of the offline commands: dataset, training, baselines, export."""
+"""Command-line arguments of the offline commands: dataset, training, export, lateness sweep."""
 
 from __future__ import annotations
 
@@ -10,6 +10,14 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
+from finspeq.adapters.inbound.selection import (
+    EventSelection,
+    add_disorder,
+    add_selection,
+    disorder_from,
+    selection_from,
+)
+from finspeq.application.disorder import Disorder
 from finspeq.application.messages import Imbalance, ModelArtifact, TimeRange
 from finspeq.domain.model import EventTime
 from finspeq.domain.policy import Thresholds
@@ -74,9 +82,26 @@ class ExportCommand:
     threads: int
 
 
+@dataclass(frozen=True, slots=True)
+class LatenessSweepCommand:
+    """Arguments of `lateness-sweep`: in-process comparison of arrival and canonical order."""
+
+    selection: EventSelection
+    disorder: Disorder
+    lateness_values: tuple[int, ...]
+    model_dir: Path | None
+    output: Path
+
+
 Command = (
-    BuildDatasetCommand | DatasetManifestCommand | TrainCommand | BaselinesCommand | ExportCommand
+    BuildDatasetCommand
+    | DatasetManifestCommand
+    | TrainCommand
+    | BaselinesCommand
+    | ExportCommand
+    | LatenessSweepCommand
 )
+DEFAULT_LATENESS_VALUES = "0,60,600,3600,21600"
 FEATURE_SET_CHOICES = ("v1", "v2")
 DEFAULT_FEATURE_SET = "v2"
 DEFAULT_DATASET_DIR = Path(f"data/processed/training_{DEFAULT_FEATURE_SET}")
@@ -103,6 +128,12 @@ def parse(argv: Sequence[str]) -> Command:
     manifest = commands.add_parser("dataset-manifest", help="write DATASET.json for parts")
     manifest.add_argument("--dir", type=Path, default=DEFAULT_DATASET_DIR)
     _add_model_commands(commands)
+    sweep = commands.add_parser("lateness-sweep", help="feature error per allowed lateness")
+    add_selection(sweep)
+    add_disorder(sweep)
+    sweep.add_argument("--lateness", default=DEFAULT_LATENESS_VALUES, help="seconds, comma list")
+    sweep.add_argument("--model-dir", type=Path, help="ONNX model directory; omit for features")
+    sweep.add_argument("--output", type=Path, default=Path("notes/m3/lateness_sweep.json"))
     args = parser.parse_args(list(argv))
     if args.command == "build-dataset":
         return BuildDatasetCommand(
@@ -116,6 +147,14 @@ def parse(argv: Sequence[str]) -> Command:
         )
     if args.command == "dataset-manifest":
         return DatasetManifestCommand(directory=args.dir)
+    if args.command == "lateness-sweep":
+        return LatenessSweepCommand(
+            selection=selection_from(args),
+            disorder=disorder_from(args),
+            lateness_values=tuple(int(value) for value in args.lateness.split(",")),
+            model_dir=args.model_dir,
+            output=args.output,
+        )
     return _model_command(args)
 
 

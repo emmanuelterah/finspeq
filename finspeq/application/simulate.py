@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
-from finspeq.application.messages import TimeRange
+from finspeq.application.disorder import Disorder, arrival_order
+from finspeq.application.messages import LabeledTransaction, TimeRange
 from finspeq.application.ports import BulkPublisher, Clock, HistoricalSource
 from finspeq.application.replay import CardSlice
 from finspeq.domain.model import Transaction
@@ -18,9 +19,10 @@ class SimulationPlan:
     Attributes:
         time_range: Event times to publish; None publishes everything.
         cards: Cards to publish.
-        limit: Maximum number of transactions; None for no limit.
-        rate: Target transactions per second; 0 publishes as fast as possible.
-        chunk_size: Transactions per publish call.
+        limit: Maximum number of distinct transactions; None for no limit.
+        rate: Target arrivals per second; 0 publishes as fast as possible.
+        chunk_size: Arrivals per publish call.
+        disorder: Delays and duplicates applied after the card and limit filters.
     """
 
     time_range: TimeRange | None
@@ -28,11 +30,12 @@ class SimulationPlan:
     limit: int | None
     rate: float
     chunk_size: int
+    disorder: Disorder
 
 
 @dataclass(frozen=True, slots=True)
 class SimulationReport:
-    """Number of transactions published, elapsed seconds, and achieved rate."""
+    """Number of arrivals published (duplicates included), elapsed seconds, and achieved rate."""
 
     events: int
     chunks: int
@@ -41,7 +44,7 @@ class SimulationReport:
 
 
 class ReplayHistory:
-    """Publishes historical transactions in canonical order, in chunks, at a target rate."""
+    """Publishes historical transactions in arrival order, in chunks, at a target rate."""
 
     def __init__(
         self,
@@ -64,18 +67,14 @@ class ReplayHistory:
         self._sleep = sleep
 
     def execute(self, plan: SimulationPlan) -> SimulationReport:
-        """Publish the plan's transactions and return counts and the achieved rate.
+        """Publish the plan's arrivals and return counts and the achieved rate.
 
         After each chunk, sleeps until `published / rate` seconds have passed since the start.
         """
         start = self._clock.now()
         chunk: list[Transaction] = []
         published = chunks = 0
-        for item in self._source.iter_labeled(plan.time_range):
-            if plan.limit is not None and published + len(chunk) >= plan.limit:
-                break
-            if not plan.cards.contains(item.transaction.card):
-                continue
+        for item in arrival_order(self._selected(plan), plan.disorder):
             chunk.append(item.transaction)
             if len(chunk) == plan.chunk_size:
                 published, chunks = self._publish(chunk, published, chunks, plan, start)
@@ -84,6 +83,16 @@ class ReplayHistory:
         elapsed = self._clock.now() - start
         rate = published / elapsed if elapsed > 0 else 0.0
         return SimulationReport(published, chunks, elapsed, rate)
+
+    def _selected(self, plan: SimulationPlan) -> Iterator[LabeledTransaction]:
+        """Yield the source's transactions in plan's time range and slice, up to plan.limit."""
+        count = 0
+        for item in self._source.iter_labeled(plan.time_range):
+            if plan.limit is not None and count >= plan.limit:
+                return
+            if plan.cards.contains(item.transaction.card):
+                count += 1
+                yield item
 
     def _publish(
         self,

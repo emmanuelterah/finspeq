@@ -1,4 +1,4 @@
-"""Composition root of the offline process: dataset building, training, baselines, export."""
+"""Composition root of the offline process: datasets, training, baselines, export, lateness."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from finspeq.adapters.outbound.onnx_model import OnnxBatchScorer, OnnxExporter, 
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource, ParquetTrainingSink
 from finspeq.adapters.outbound.training_data import feature_layout, load_split
 from finspeq.application.build_dataset import BuildPlan, BuildTrainingSet, SplitBoundaries
+from finspeq.application.disorder import arrival_order
+from finspeq.application.lateness import LatenessReport, LatenessSweep, Scoring
 from finspeq.application.messages import (
     DatasetSummary,
     ModelArtifact,
@@ -34,7 +36,8 @@ from finspeq.application.modeling import (
     VerifyParity,
 )
 from finspeq.domain.errors import SchemaMismatchError
-from finspeq.domain.features import FEATURE_SETS, FeatureSet, FeatureVector
+from finspeq.domain.features import FEATURE_SET_V2, FEATURE_SETS, FeatureSet, FeatureVector
+from finspeq.domain.policy import DecisionPolicy
 
 BENCHMARK_VECTORS = 1_000
 EVALUATED_SPLITS = (Split.VALID, Split.TEST)
@@ -142,6 +145,44 @@ def run_export(command: offline_cli.ExportCommand) -> dict[str, object]:
     return report
 
 
+def run_lateness_sweep(command: offline_cli.LatenessSweepCommand) -> LatenessReport:
+    """Run the lateness sweep over the selection and write the report to command.output.
+
+    Uses the model's feature set and stored thresholds when command.model_dir is given,
+    otherwise FEATURE_SET_V2 without decisions.
+    """
+    selection = command.selection
+    items = [
+        item
+        for item in ParquetHistoricalSource(selection.source).iter_labeled(selection.time_range)
+        if selection.cards.contains(item.transaction.card)
+    ]
+    arrivals = list(arrival_order(items, command.disorder))
+    scoring = None
+    feature_set = FEATURE_SET_V2
+    model_version = None
+    if command.model_dir is not None:
+        model = OnnxFraudModel(str(command.model_dir))
+        scoring = Scoring(model, DecisionPolicy(model.thresholds))
+        feature_set = FEATURE_SETS[model.schema]
+        model_version = model.version
+    sweep = LatenessSweep(MemoryWindowStore, feature_set, scoring)
+    report = sweep.execute(items, arrivals, command.lateness_values)
+    write_json(
+        command.output,
+        {
+            "source": selection.source.as_posix(),
+            "time_range": selection.time_range,
+            "cards": selection.cards,
+            "disorder": command.disorder,
+            "feature_set": feature_set.version,
+            "model_version": model_version,
+            "report": report,
+        },
+    )
+    return report
+
+
 def _feature_set_of(dataset_dir: Path) -> FeatureSet:
     """Return the registered feature set whose version and names match the dataset's parts.
 
@@ -164,6 +205,7 @@ def main(argv: Sequence[str]) -> int:
         offline_cli.TrainCommand: run_train,
         offline_cli.BaselinesCommand: run_baselines,
         offline_cli.ExportCommand: run_export,
+        offline_cli.LatenessSweepCommand: run_lateness_sweep,
     }
     print(render(handlers[type(command)](command)))
     return 0

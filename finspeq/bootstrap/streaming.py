@@ -16,6 +16,7 @@ from finspeq.adapters.inbound import stream_cli
 from finspeq.adapters.inbound.faults import FaultInjector
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits, WorkerReport
 from finspeq.adapters.inbound.output import render
+from finspeq.adapters.inbound.selection import EventSelection
 from finspeq.adapters.outbound.clock import SystemClock
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
@@ -29,6 +30,7 @@ from finspeq.adapters.outbound.redpanda import (
     producer_config,
 )
 from finspeq.application.apply_events import ApplyEvents
+from finspeq.application.disorder import arrival_order
 from finspeq.application.messages import LabeledTransaction
 from finspeq.application.ports import Metrics
 from finspeq.application.replay import partitioned_batches
@@ -54,7 +56,12 @@ def run_simulate(command: stream_cli.SimulateCommand) -> SimulationReport:
     publisher = RedpandaPublisher(producer, command.topic, PUBLISH_TIMEOUT_S)
     selection = command.selection
     plan = SimulationPlan(
-        selection.time_range, selection.cards, command.limit, command.rate, command.chunk_size
+        selection.time_range,
+        selection.cards,
+        command.limit,
+        command.rate,
+        command.chunk_size,
+        command.disorder,
     )
     source = ParquetHistoricalSource(selection.source)
     return ReplayHistory(source, publisher, SystemClock(), time.sleep).execute(plan)
@@ -74,7 +81,8 @@ def run_worker(command: stream_cli.WorkerCommand) -> WorkerReport:
     clock = SystemClock()
     limits = WorkerLimits(command.batch_size, command.idle_exit_s, command.start_timeout_s)
     faults = FaultInjector(command.faults, _hard_exit)
-    worker = FeatureWorker(source, ApplyEvents(store, metrics, clock), clock, limits, faults)
+    use_case = ApplyEvents(store, metrics, clock, command.lateness_s)
+    worker = FeatureWorker(source, use_case, clock, limits, faults)
     stop = threading.Event()
     _stop_on_signals(stop)
     try:
@@ -103,15 +111,20 @@ def run_verify_replay(command: stream_cli.VerifyReplayCommand) -> ReplayReport:
 
 
 def run_verify_state(command: stream_cli.VerifyStateCommand) -> StateReport:
-    """Compare the worker-filled Redis store with an in-process replay of the selection."""
+    """Compare the worker-filled Redis store with an in-process replay of the same arrivals.
+
+    The replay applies the selection in the arrival order that command.disorder produces, which
+    is the order `simulate` published with the same disorder arguments.
+    """
     candidate = _redis_store(command.redis_url, command.topic, command.lateness_s)
     use_case = VerifyFinalState(
         MemoryWindowStore(command.lateness_s), candidate, command.partitions
     )
-    return use_case.execute(_selected_items(command.selection), STATE_BATCH_SIZE)
+    arrivals = arrival_order(_selected_items(command.selection), command.disorder)
+    return use_case.execute(arrivals, STATE_BATCH_SIZE)
 
 
-def _selected_items(selection: stream_cli.EventSelection) -> Iterator[LabeledTransaction]:
+def _selected_items(selection: EventSelection) -> Iterator[LabeledTransaction]:
     """Yield the selection's historical transactions in canonical order."""
     for item in ParquetHistoricalSource(selection.source).iter_labeled(selection.time_range):
         if selection.cards.contains(item.transaction.card):

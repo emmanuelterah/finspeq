@@ -1,4 +1,4 @@
-"""Tests for the feature worker loop and the streaming CLI arguments."""
+"""Tests for the feature worker loop and the command-line arguments."""
 
 from __future__ import annotations
 
@@ -8,11 +8,12 @@ import threading
 
 import pytest
 
-from finspeq.adapters.inbound import stream_cli
+from finspeq.adapters.inbound import offline_cli, stream_cli
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
 from finspeq.application.apply_events import ApplyEvents
+from finspeq.application.disorder import NO_DISORDER, Disorder
 from finspeq.application.messages import EventBatch, EventPosition
 from finspeq.application.replay import CardSlice
 from tests.factories import BASE_TIME, batch, make_tx
@@ -127,6 +128,22 @@ def test_worker_and_verify_arguments() -> None:
     assert isinstance(state, stream_cli.VerifyStateCommand)
     assert state.selection.time_range is None
     assert state.partitions == 4
+    assert state.disorder == NO_DISORDER
+    assert worker.lateness_s == state.lateness_s == stream_cli.DEFAULT_LATENESS_S == 3_600
+
+
+def test_disorder_and_lateness_sweep_arguments() -> None:
+    """Parse disorder flags on simulate and the lateness list of lateness-sweep."""
+    flags = ["--delayed-fraction", "0.2", "--mean-delay-s", "60", "--max-delay-s", "600"]
+    flags += ["--duplicate-fraction", "0.01", "--disorder-seed", "9"]
+    simulate = stream_cli.parse(["simulate", *flags])
+    assert isinstance(simulate, stream_cli.SimulateCommand)
+    assert simulate.disorder == Disorder(0.2, 60.0, 600, 0.01, 9)
+    sweep = offline_cli.parse(["lateness-sweep", "--lateness", "0,600", *flags])
+    assert isinstance(sweep, offline_cli.LatenessSweepCommand)
+    assert sweep.lateness_values == (0, 600)
+    assert sweep.disorder == simulate.disorder
+    assert sweep.model_dir is None
 
 
 OFFLINE_ONLY = ("lightgbm", "onnxruntime", "onnxmltools", "sklearn")

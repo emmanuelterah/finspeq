@@ -23,7 +23,7 @@ from confluent_kafka import Consumer, TopicPartition
 
 from finspeq.adapters.codec import decode
 from finspeq.adapters.inbound.faults import CrashPoint, FaultInjector, FaultPlan
-from finspeq.adapters.inbound.stream_cli import DEFAULT_SOURCE, parse_slice
+from finspeq.adapters.inbound.selection import DEFAULT_SOURCE, parse_slice
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource
 from finspeq.adapters.outbound.redpanda import consumer_config, position_of
 from finspeq.application.messages import LabeledTransaction, TimeRange
