@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 
+from finspeq.adapters.inbound.faults import NO_FAULTS, CrashPoint, FaultInjector
 from finspeq.application.apply_events import ApplyEvents
 from finspeq.application.ports import Clock, EventSource
 
@@ -50,7 +51,12 @@ class FeatureWorker:
     """Polls batches from an event source and applies them with ApplyEvents."""
 
     def __init__(
-        self, source: EventSource, use_case: ApplyEvents, clock: Clock, limits: WorkerLimits
+        self,
+        source: EventSource,
+        use_case: ApplyEvents,
+        clock: Clock,
+        limits: WorkerLimits,
+        faults: FaultInjector | None = None,
     ) -> None:
         """Create a worker.
 
@@ -59,16 +65,21 @@ class FeatureWorker:
             use_case: Applies each batch.
             clock: Measures idle time.
             limits: Batch size and waiting limits.
+            faults: Crash injector called after each poll, apply, and acknowledgement; None
+                injects no crashes.
         """
         self._source = source
         self._use_case = use_case
         self._clock = clock
         self._limits = limits
+        self._faults = faults or FaultInjector(NO_FAULTS, _never_called)
 
     def run(self, stop: threading.Event) -> WorkerReport:
         """Apply batches until stop is set or a waiting limit passes; return the totals.
 
-        Each batch is acknowledged to the source after it is applied.
+        Each batch is acknowledged to the source after it is applied. The fault injector's
+        checkpoints run after a poll that returned events, after the apply, and after the
+        acknowledgement.
         """
         batches = events = applied = skipped = 0
         last_event = self._clock.now()
@@ -84,8 +95,11 @@ class FeatureWorker:
                 continue
             if first_event is None:
                 first_event = poll_start
+            self._faults.checkpoint(CrashPoint.AFTER_POLL)
             result = self._use_case.execute(batch)
+            self._faults.checkpoint(CrashPoint.AFTER_APPLY)
             self._source.acknowledge(batch)
+            self._faults.checkpoint(CrashPoint.AFTER_ACK)
             batches += 1
             events += len(batch.events)
             applied += result.applied
@@ -103,3 +117,7 @@ class FeatureWorker:
         if limit is not None and self._clock.now() - last_event >= limit:
             return reason
         return None
+
+
+def _never_called() -> None:
+    """Crash callback of the default injector, whose plan never crashes."""

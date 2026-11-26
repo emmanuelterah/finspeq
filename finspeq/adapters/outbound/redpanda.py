@@ -30,18 +30,34 @@ def producer_config(bootstrap: str, linger_ms: int) -> dict[str, str | int | boo
     }
 
 
-def consumer_config(bootstrap: str, group: str) -> dict[str, str | int | bool]:
-    """Return consumer settings: manual offsets, start at the beginning, committed reads, IPv4."""
-    return {
+DEFAULT_SESSION_TIMEOUT_MS = 6_000
+HEARTBEAT_INTERVAL_MS = 2_000
+
+
+def consumer_config(
+    bootstrap: str, group: str, instance_id: str | None = None
+) -> dict[str, str | int | bool]:
+    """Return consumer settings: manual offsets, start at the beginning, committed reads, IPv4.
+
+    The 6 s session timeout bounds how long a crashed member holds its partitions. With
+    instance_id set, the consumer is a static member: a restart with the same id gets its
+    partitions back without waiting for the session timeout.
+    """
+    config: dict[str, str | int | bool] = {
         "bootstrap.servers": bootstrap,
         "broker.address.family": "v4",
         "group.id": group,
+        "session.timeout.ms": DEFAULT_SESSION_TIMEOUT_MS,
+        "heartbeat.interval.ms": HEARTBEAT_INTERVAL_MS,
         "enable.auto.commit": False,
         "enable.auto.offset.store": False,
         "auto.offset.reset": "earliest",
         "isolation.level": "read_committed",
         "enable.partition.eof": False,
     }
+    if instance_id is not None:
+        config["group.instance.id"] = instance_id
+    return config
 
 
 class ProducerLike(Protocol):
@@ -220,7 +236,7 @@ class RedpandaSource(EventSource):
         error = message.error()
         if error is not None:
             raise PortError(f"consumer error: {error}")
-        position = _position_of(message)
+        position = position_of(message)
         event = decode(message.key(), message.value(), position)
         self._buffers.setdefault(position.partition, []).append(event)
 
@@ -245,12 +261,12 @@ def _delivery_callback(
 
     def on_delivery(error: KafkaError | None, message: Message) -> None:
         """Store the error, or the message's partition and offset."""
-        results[index] = error if error is not None else _position_of(message)
+        results[index] = error if error is not None else position_of(message)
 
     return on_delivery
 
 
-def _position_of(message: Message) -> EventPosition:
+def position_of(message: Message) -> EventPosition:
     """Return the partition and offset of a delivered or consumed message.
 
     Raises:

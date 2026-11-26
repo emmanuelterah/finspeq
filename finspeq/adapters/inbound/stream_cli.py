@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from finspeq.adapters.inbound.faults import CrashPoint, FaultPlan
 from finspeq.application.messages import TimeRange
 from finspeq.application.replay import ALL_CARDS, CardSlice
 from finspeq.domain.model import EventTime
@@ -55,6 +56,8 @@ class WorkerCommand:
     idle_exit_s: float | None
     start_timeout_s: float | None
     metrics_port: int | None
+    instance_id: str | None
+    faults: FaultPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +109,10 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
         "--start-timeout-s", type=float, default=60.0, help="stop if no event arrives in time"
     )
     worker.add_argument("--metrics-port", type=int, help="serve Prometheus metrics on this port")
+    worker.add_argument("--instance-id", help="static group member id (fast rejoin after crash)")
+    worker.add_argument("--crash-point", choices=[p.value for p in CrashPoint])
+    worker.add_argument("--crash-probability", type=float, default=0.0)
+    worker.add_argument("--crash-seed", type=int, default=0)
     replay = commands.add_parser("verify-replay", help="compare Redis with memory, in process")
     _add_selection(replay)
     replay.add_argument("--partitions", type=int, default=4)
@@ -155,6 +162,12 @@ def _command_from(args: argparse.Namespace) -> StreamCommand | None:
             args.idle_exit_s,
             args.start_timeout_s,
             args.metrics_port,
+            args.instance_id,
+            FaultPlan(
+                None if args.crash_point is None else CrashPoint(args.crash_point),
+                args.crash_probability,
+                args.crash_seed,
+            ),
         )
     if args.command == "verify-replay":
         return VerifyReplayCommand(

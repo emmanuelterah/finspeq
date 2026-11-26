@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
 import threading
@@ -12,6 +13,7 @@ import redis
 from confluent_kafka import Consumer, Producer
 
 from finspeq.adapters.inbound import stream_cli
+from finspeq.adapters.inbound.faults import FaultInjector
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits, WorkerReport
 from finspeq.adapters.inbound.output import render
 from finspeq.adapters.outbound.clock import SystemClock
@@ -43,6 +45,7 @@ PUBLISH_TIMEOUT_S = 30.0
 POLL_TIMEOUT_S = 0.5
 VERIFY_TOPIC = "verify-replay"
 STATE_BATCH_SIZE = 500
+CRASH_EXIT_CODE = 137
 
 
 def run_simulate(command: stream_cli.SimulateCommand) -> SimulationReport:
@@ -65,12 +68,13 @@ def run_worker(command: stream_cli.WorkerCommand) -> WorkerReport:
         prometheus = PrometheusMetrics()
         prometheus.serve(command.metrics_port)
         metrics = prometheus
-    consumer = Consumer(consumer_config(command.bootstrap, command.group))
+    consumer = Consumer(consumer_config(command.bootstrap, command.group, command.instance_id))
     source = RedpandaSource(consumer, command.topic, store.position, POLL_TIMEOUT_S)
     source.start()
     clock = SystemClock()
     limits = WorkerLimits(command.batch_size, command.idle_exit_s, command.start_timeout_s)
-    worker = FeatureWorker(source, ApplyEvents(store, metrics, clock), clock, limits)
+    faults = FaultInjector(command.faults, _hard_exit)
+    worker = FeatureWorker(source, ApplyEvents(store, metrics, clock), clock, limits, faults)
     stop = threading.Event()
     _stop_on_signals(stop)
     try:
@@ -122,6 +126,11 @@ def _redis_client(url: str) -> redis.Redis:
 def _redis_store(url: str, topic: str, lateness_s: int) -> RedisWindowStore:
     """Return a RedisWindowStore over the server at url."""
     return RedisWindowStore(_redis_client(url), topic, lateness_s)
+
+
+def _hard_exit() -> None:
+    """End the process immediately with CRASH_EXIT_CODE, without cleanup or offset commits."""
+    os._exit(CRASH_EXIT_CODE)
 
 
 def _stop_on_signals(stop: threading.Event) -> None:
