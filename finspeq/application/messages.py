@@ -60,11 +60,20 @@ class EventBatch:
 
 @dataclass(frozen=True, slots=True)
 class ApplyResult:
-    """Outcome of storing one batch: counts and the stored position afterwards."""
+    """Outcome of storing one batch: counts and the stored position afterwards.
+
+    Attributes:
+        applied: Events stored.
+        skipped: Events not stored: at or below the stored position, or a repeated tx_id.
+        position: The stored position after the batch, or None if nothing was ever applied.
+        behind: Stored events whose time is earlier than their card's newest event time
+            before them (out of order for their card).
+    """
 
     applied: int
     skipped: int
     position: EventPosition | None
+    behind: int
 
 
 class Split(Enum):

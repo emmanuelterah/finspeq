@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left, insort
+from enum import Enum
 
 from finspeq.application.errors import PositionGapError
 from finspeq.application.messages import ApplyResult, Event, EventBatch, EventPosition
@@ -44,19 +45,29 @@ class MemoryWindowStore(WindowReader, WindowWriter):
         """
         pending = _unapplied(batch, self._positions.get(batch.partition))
         if not pending:
-            return ApplyResult(0, len(batch.events), self.position(batch.partition))
+            return ApplyResult(0, len(batch.events), self.position(batch.partition), 0)
         staging = _Staging(self._entries, self._newest)
-        applied = sum(1 for event in pending if staging.add(event.transaction))
+        outcomes = [staging.add(event.transaction) for event in pending]
+        applied = sum(1 for outcome in outcomes if outcome is not _Outcome.SKIPPED)
+        behind = sum(1 for outcome in outcomes if outcome is _Outcome.BEHIND)
         staging.prune(WINDOW_SECONDS + self._lateness)
         self._entries.update(staging.entries)
         self._newest.update(staging.newest)
         self._positions[batch.partition] = pending[-1].position.offset
-        return ApplyResult(applied, len(batch.events) - applied, pending[-1].position)
+        return ApplyResult(applied, len(batch.events) - applied, pending[-1].position, behind)
 
     def position(self, partition: int) -> EventPosition | None:
         """Return the last applied position for partition, or None if nothing was applied."""
         offset = self._positions.get(partition)
         return None if offset is None else EventPosition(partition, offset)
+
+
+class _Outcome(Enum):
+    """Result of adding one event to the staging copies."""
+
+    IN_ORDER = "in-order"
+    BEHIND = "behind"
+    SKIPPED = "skipped"
 
 
 class _Staging:
@@ -74,19 +85,20 @@ class _Staging:
         self.entries: dict[CardId, list[WindowEntry]] = {}
         self.newest: dict[CardId, int] = {}
 
-    def add(self, tx: Transaction) -> bool:
+    def add(self, tx: Transaction) -> _Outcome:
         """Insert tx's entry into its card's staged list in order key order.
 
         Returns:
-            True if the entry was inserted; False if the card already holds tx's id.
+            SKIPPED if the card already holds tx's id; BEHIND if the entry was inserted and tx
+            is earlier than the card's newest event time before it; otherwise IN_ORDER.
         """
         entries = self._card_entries(tx.card)
         previous = self.newest.get(tx.card, self._committed_newest.get(tx.card, tx.time.epoch_s))
         self.newest[tx.card] = max(previous, tx.time.epoch_s)
         if any(entry.tx_id == tx.tx_id for entry in entries):
-            return False
+            return _Outcome.SKIPPED
         insort(entries, WindowEntry.from_transaction(tx), key=_entry_key)
-        return True
+        return _Outcome.BEHIND if tx.time.epoch_s < previous else _Outcome.IN_ORDER
 
     def prune(self, keep_seconds: int) -> None:
         """Remove staged entries older than their card's newest time minus keep_seconds."""

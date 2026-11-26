@@ -98,6 +98,18 @@ def test_positions_are_tracked_per_partition(make_store: StoreFactory) -> None:
     assert store.position(2) is None
 
 
+def test_events_behind_their_card_are_counted(make_store: StoreFactory) -> None:
+    """Count stored events earlier than their card's newest time; skip duplicates and others."""
+    store = make_store(0)
+    first = store.apply(batch((0, make_tx(1, BASE_TIME)), (1, make_tx(2, BASE_TIME - 60))))
+    other_card = make_tx(3, BASE_TIME - 120, card=OTHER_CARD)
+    second = store.apply(batch((2, make_tx(4, BASE_TIME - 30)), (3, other_card)))
+    repeat = store.apply(batch((4, make_tx(2, BASE_TIME - 60))))
+    assert (first.applied, first.behind) == (2, 1)
+    assert (second.applied, second.behind) == (2, 1)
+    assert (repeat.applied, repeat.behind) == (0, 0)
+
+
 def test_late_event_beyond_lateness_is_pruned(make_store: StoreFactory) -> None:
     """Drop an entry older than the card's newest time minus window and lateness."""
     store = make_store(0)

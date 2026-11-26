@@ -94,7 +94,7 @@ class RedisWindowStore(WindowReader, WindowWriter):
                 tx.merchant,
             ]
         try:
-            applied, skipped, last = self._apply_script(
+            applied, skipped, last, behind = self._apply_script(
                 keys=[self._position_key(batch.partition)], args=args
             )
         except redis.ResponseError as exc:
@@ -107,7 +107,7 @@ class RedisWindowStore(WindowReader, WindowWriter):
         except (redis.ConnectionError, redis.TimeoutError) as exc:
             raise StoreUnavailableError(str(exc)) from exc
         position = None if last == NO_POSITION else EventPosition(batch.partition, int(last))
-        return ApplyResult(applied=int(applied), skipped=int(skipped), position=position)
+        return ApplyResult(int(applied), int(skipped), position, int(behind))
 
     def position(self, partition: int) -> EventPosition | None:
         """Return the last applied position for partition, or None if nothing was applied.

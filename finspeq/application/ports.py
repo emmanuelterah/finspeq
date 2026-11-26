@@ -47,6 +47,8 @@ class WindowWriter(Protocol):
         Events at or below the stored position for the partition are skipped. A transaction id
         already stored for its card keeps its first entry. Each card touched by the batch loses
         entries older than its newest event time minus WINDOW_SECONDS and the allowed lateness.
+        The result counts stored events that are earlier than their card's newest event time
+        before them, in batch order.
 
         Raises:
             PositionGapError: The unapplied offsets do not continue from the stored position

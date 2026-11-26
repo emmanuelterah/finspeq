@@ -24,7 +24,8 @@ class ApplyEvents:
         Args:
             writer: Window store that receives the batches.
             metrics: Receives fq_events_applied_total, fq_events_skipped_total,
-                fq_apply_latency_ms, fq_event_lateness_s, and fq_late_events_total.
+                fq_events_behind_card_total, fq_apply_latency_ms, fq_event_lateness_s, and
+                fq_late_events_total.
             clock: Times each apply call.
             allowed_lateness_s: Distance behind a partition's newest event time beyond which
                 a delivered event is counted in fq_late_events_total.
@@ -55,6 +56,7 @@ class ApplyEvents:
         self._metrics.observe("fq_apply_latency_ms", elapsed_ms, labels)
         self._metrics.increment("fq_events_applied_total", result.applied, labels)
         self._metrics.increment("fq_events_skipped_total", result.skipped, labels)
+        self._metrics.increment("fq_events_behind_card_total", result.behind, labels)
         return result
 
     def _record_lateness(self, batch: EventBatch, labels: dict[str, str]) -> None:

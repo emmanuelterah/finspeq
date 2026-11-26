@@ -7,7 +7,8 @@
 -- ARGV[3]  number of events n
 -- ARGV[4..] n groups of 6 values: offset, card, tx_id, time, cents, merchant
 --
--- Returns {applied, skipped, last offset or -1}.
+-- Returns {applied, skipped, last offset or -1, behind}; behind counts stored events earlier
+-- than their card's newest event time before them.
 -- Errors: "INVALID ..." for a malformed argument list, "GAP ..." for an offset gap.
 -- Every check runs before the first write.
 
@@ -59,7 +60,7 @@ for _, event in ipairs(events) do
   end
 end
 if #pending == 0 then
-  return {0, count, stored or -1}
+  return {0, count, stored or -1, 0}
 end
 
 local function card_key(card, suffix)
@@ -67,6 +68,7 @@ local function card_key(card, suffix)
 end
 
 local applied = 0
+local behind = 0
 local newest = {}
 local touched = {}
 for _, event in ipairs(pending) do
@@ -75,6 +77,7 @@ for _, event in ipairs(pending) do
     touched[#touched + 1] = event.card
     current = tonumber(redis.call('GET', card_key(event.card, 'newest'))) or event.time
   end
+  local is_behind = event.time < current
   if event.time > current then
     current = event.time
   end
@@ -83,6 +86,9 @@ for _, event in ipairs(pending) do
   if redis.call('HSETNX', card_key(event.card, 'tx'), event.tx, value) == 1 then
     redis.call('ZADD', card_key(event.card, 'ev'), event.time_text, event.tx)
     applied = applied + 1
+    if is_behind then
+      behind = behind + 1
+    end
   end
 end
 
@@ -99,4 +105,4 @@ end
 
 local last = pending[#pending].offset
 redis.call('SET', KEYS[1], string.format('%d', last))
-return {applied, count - applied, last}
+return {applied, count - applied, last, behind}

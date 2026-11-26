@@ -55,6 +55,7 @@ def test_apply_records_counts_and_latency() -> None:
     assert metrics.counters == {
         "fq_events_applied_total": 2.0,
         "fq_events_skipped_total": 2.0,
+        "fq_events_behind_card_total": 0.0,
         "fq_late_events_total": 0.0,
     }
     assert metrics.observed[0][0] == "fq_apply_latency_ms"
