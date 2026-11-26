@@ -35,6 +35,7 @@ services:
       - >-
         rpk topic create transactions -X brokers=redpanda:9092
         -p ${FINSPEQ_PARTITIONS:-1} -c retention.ms=-1 -c cleanup.policy=delete
+        -c write.caching=false
         || rpk topic describe transactions -X brokers=redpanda:9092
     restart: "no"
 
@@ -67,7 +68,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finspeq}
       POSTGRES_DB: ${POSTGRES_DB:-finspeq}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${FINSPEQ_POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
