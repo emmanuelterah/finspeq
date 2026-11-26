@@ -100,6 +100,16 @@ A ledger worker also consumes the topic and writes decisions to Postgres (ARCHIT
 - **The volume is seasonal:** Dec 2025 has 1.34M rows at a 0.39% fraud rate, and Jun 2026 is only partial.
 - `cc_num` has up to 19 digits, so it is stored as a string. Some exceed the range of a signed 64-bit integer.
 
+### Category–time confound (ADR-009)
+
+Legitimate traffic moves through merchant categories in time blocks: each month's legitimate
+rows come from one to four categories (gas_transport in January 2025, travel in June 2026). Fraud
+uses the same four categories throughout. A category feature therefore separates fraud from
+legitimate traffic within a period, but legitimate traffic in the test months uses categories
+that never appear as legitimate in training. `category_code` is dropped from v2. Monthly
+concentration is listed in `notes/data_quality.md`. Per-month test metrics must be reported,
+because raw amounts still shift with the category mix.
+
 ### Split (by time, never random)
 
 | Split | Range | Purpose |
@@ -141,17 +151,23 @@ Each port has two adapters. Both must pass the same contract test suite:
 
 For each event, both paths run `read → FeatureSet.compute → (score or write row) → apply`.
 
-### Initial features
+### Feature sets
 
-| Feature | Window | Notes |
-|---|---|---|
-| `amount` | none | raw |
-| `tx_count_1h`, `tx_count_24h` | event-time | ZCOUNT |
-| `spend_24h` | event-time | sum of amounts in the window |
-| `amount_ratio_to_avg_24h` | event-time | amount / mean of the window |
-| `secs_since_last_tx` | none | |
-| `distinct_merchants_24h` | event-time | |
-| `category`, `hour_of_day` | none | encoded |
+`FEATURE_SET_V2` is the default. `FEATURE_SET_V1` stays registered for comparison
+(`--feature-set v1`). All windows look back from the transaction and exclude it.
+
+| Feature | v1 | v2 | Definition |
+|---|---|---|---|
+| `amount_dollars` | ✓ | ✓ | amount in dollars |
+| `tx_count_1h`, `tx_count_24h` | ✓ | ✓ | prior transactions of the card in the window |
+| `spend_1h`, `spend_24h` | ✓ | ✓ | sum of prior amounts in the window, in dollars |
+| `amount_to_mean_24h` | ✓ | ✓ | amount / mean prior amount (0 if none) |
+| `amount_to_max_24h` | | ✓ | amount / largest prior amount (0 if none) |
+| `secs_since_last` | ✓ | ✓ | seconds since the previous transaction (86400 if none in 24 h) |
+| `distinct_merchants_24h` | ✓ | ✓ | distinct merchants among prior transactions |
+| `hour_of_day_utc` | ✓ | ✓ | UTC hour of the transaction |
+| `category_code` | ✓ | | category position in declaration order (dropped in v2, ADR-009) |
+| `home_merchant_km` | ✓ | ✓ | haversine distance between home and merchant |
 
 ### Rules that prevent training-serving skew
 
@@ -183,12 +199,16 @@ The harness runs in CI-style scripts (`make replay-test FAULTS=crash,dup`).
 
 Each milestone ends with a replay test that passes and a short write-up in `notes/`.
 
-### M0: Offline baseline (days, not weeks)
+### M0: Offline baseline (done; results in notes/m0.md)
 
-- ~~Download dataset; convert to Parquet~~ (done). ~~Write the domain model, `FeatureSet`, and `MemoryWindowStore`~~ (done). Build the training set.
-- Train LightGBM, evaluating with PR-AUC and recall at 0.5% FPR.
-- Choose thresholds from the false-positive budget on the validation set.
-- Export to ONNX with `zipmap=False`. Assert LightGBM and ONNX outputs agree within 1e-5.
+- Canonical event file and data-quality report: `scripts/sort_events.py`, `scripts/data_quality.py`.
+- Training set built month by month with a 24-hour warm-up (`python -m finspeq build-dataset`);
+  a test proves the result equals a single pass.
+- LightGBM with early stopping on validation PR-AUC; rule and logistic baselines
+  (`train`, `baselines`).
+- Thresholds from validation false-positive budgets: REVIEW at 1%, BLOCK at 0.1%.
+- ONNX export with `zipmap=False` and lineage metadata; parity with LightGBM within 1e-5 and a
+  single-call latency benchmark (`export`).
 
 ### M1: Single partition, single worker
 

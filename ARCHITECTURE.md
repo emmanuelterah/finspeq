@@ -64,7 +64,7 @@ The domain and application rings import no third-party package. That means no `n
 
 | Type | Kind | Fields | Invariants checked at construction |
 |---|---|---|---|
-| `CardId` | value | `value: str` | 12–19 decimal digits |
+| `CardId` | value | `value: str` | 8–19 ASCII decimal digits (ISO/IEC 7812) |
 | `TxId` | value | `value: str` | 32 lowercase hex characters |
 | `Money` | value | `cents: int` | `cents > 0` |
 | `EventTime` | value | `epoch_s: int` | `epoch_s >= 0` |
@@ -497,6 +497,7 @@ the API fill it with the vector, score, decision, and model version.
 | 006 | Postgres holds the decision ledger (full ACID, UNIQUE tx_id) | Accepted |
 | 007 | No stream-processing framework; hand-written consumer loops | Accepted |
 | 008 | No DI framework; manual composition roots | Accepted |
+| 009 | Drop the category feature (FEATURE_SET_V2) because of the category–time confound | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 

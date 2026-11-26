@@ -13,7 +13,7 @@ replay as the core invariant.
 ```powershell
 py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev,data]"
+python -m pip install -e ".[dev,data,training]"
 python scripts/ci.py
 ```
 
@@ -22,7 +22,7 @@ python scripts/ci.py
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,data]"
+python -m pip install -e ".[dev,data,training]"
 python scripts/ci.py
 ```
 
@@ -36,6 +36,20 @@ Extra dependency groups: `training` (LightGBM, ONNX), `serving` (FastAPI, ONNX R
    `data/processed/transactions.parquet`.
 
 `data/` is git-ignored.
+
+## M0 pipeline (offline model)
+
+```bash
+python scripts/sort_events.py          # canonical event file + events_sorted.manifest.json
+python scripts/data_quality.py         # notes/data_quality.md
+python -m finspeq build-dataset --feature-set v2 --jobs 8
+python -m finspeq baselines --dataset-dir data/processed/training_v2
+python -m finspeq train --dataset-dir data/processed/training_v2 --name v2-none --threads 8
+python -m finspeq export --candidate-dir models/candidates/v2-none \
+    --dataset-dir data/processed/training_v2 --threads 8
+```
+
+Install the extra groups first: `python -m pip install -e ".[dev,data,training]"`.
 
 ## Infrastructure
 
