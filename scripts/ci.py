@@ -30,6 +30,7 @@ def steps() -> list[tuple[str, list[str]]]:
                 "tests/contract",
                 "tests/adapters",
                 "tests/experiments",
+                "tests/scripts",
             ],
         ),
     ]
