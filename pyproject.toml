@@ -11,7 +11,16 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "import-linter>=2.0", "pyarrow>=16"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "import-linter>=2.0",
+    "pyarrow>=16",
+    "fakeredis[lua]>=2.20",
+    "redis>=5.0",
+    "confluent-kafka>=2.4",
+]
 data = ["duckdb>=1.0", "pyarrow>=16"]
 training = [
     "lightgbm>=4.3",
@@ -29,10 +38,18 @@ serving = [
     "pydantic-settings>=2.2",
     "prometheus-client>=0.20",
 ]
-streaming = ["confluent-kafka>=2.4", "redis>=5.0", "psycopg[binary]>=3.1"]
+streaming = [
+    "confluent-kafka>=2.4",
+    "redis>=5.0",
+    "psycopg[binary]>=3.1",
+    "prometheus-client>=0.20",
+]
 
 [tool.setuptools.packages.find]
 include = ["finspeq*"]
+
+[tool.setuptools.package-data]
+"finspeq.adapters.outbound" = ["lua/*.lua"]
 
 [tool.ruff]
 line-length = 100
@@ -68,6 +85,7 @@ files = ["finspeq", "tests", "scripts"]
 module = [
     "duckdb", "duckdb.*", "pyarrow", "pyarrow.*", "onnxruntime", "onnxruntime.*",
     "onnxmltools", "onnxmltools.*", "sklearn", "sklearn.*", "lightgbm", "lightgbm.*",
+    "fakeredis", "fakeredis.*", "prometheus_client", "prometheus_client.*",
 ]
 ignore_missing_imports = true
 

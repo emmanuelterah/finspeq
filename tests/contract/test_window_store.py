@@ -116,3 +116,22 @@ def test_late_event_within_lateness_is_kept(make_store: StoreFactory) -> None:
     store.apply(batch((1, late)))
     probe = make_tx(3, late.time.epoch_s + 1)
     assert [e.tx_id for e in store.read(probe.card, probe.order_key).entries] == [late.tx_id]
+
+
+def test_merchant_with_separator_round_trips(make_store: StoreFactory) -> None:
+    """Return a merchant name containing "|" unchanged."""
+    store = make_store(0)
+    tx = make_tx(1, BASE_TIME - 60, merchant="fraud_Smith | Sons")
+    store.apply(batch((0, tx)))
+    current = make_tx(9)
+    (entry,) = store.read(current.card, current.order_key).entries
+    assert entry.merchant == "fraud_Smith | Sons"
+    assert entry.amount == tx.amount
+
+
+def test_entries_older_than_window_are_not_read(make_store: StoreFactory) -> None:
+    """Exclude entries more than WINDOW_SECONDS before the read bound."""
+    store = make_store(0)
+    store.apply(batch((0, make_tx(1, BASE_TIME - WINDOW_SECONDS - 1)), (1, make_tx(2))))
+    probe = make_tx(3, BASE_TIME + 1)
+    assert [e.tx_id for e in store.read(probe.card, probe.order_key).entries] == [make_tx(2).tx_id]

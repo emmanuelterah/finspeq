@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
@@ -21,12 +22,46 @@ SINK_SCHEMA = "v1"
 SINK_FEATURES = ("f0", "f1", "f2")
 
 
+LIVE_REDIS_ENV = "FINSPEQ_REDIS_URL"
+LIVE_REDIS_DB = 15
+TEST_TOPIC = "contract"
+
+
 def _memory_store(allowed_lateness_s: int) -> WindowStore:
     """Return a new MemoryWindowStore with the given allowed lateness."""
     return MemoryWindowStore(allowed_lateness_s=allowed_lateness_s)
 
 
-@pytest.fixture(params=[_memory_store], ids=["memory"])
+def _fake_redis_store(allowed_lateness_s: int) -> WindowStore:
+    """Return a RedisWindowStore over a new, empty in-process fakeredis server."""
+    fakeredis = pytest.importorskip("fakeredis")
+    from finspeq.adapters.outbound.redis_window import RedisWindowStore
+
+    return RedisWindowStore(fakeredis.FakeRedis(), TEST_TOPIC, allowed_lateness_s)
+
+
+def _live_redis_store(allowed_lateness_s: int) -> WindowStore:
+    """Return a RedisWindowStore over database 15 of the server in FINSPEQ_REDIS_URL, flushed."""
+    url = os.environ.get(LIVE_REDIS_ENV)
+    if not url:
+        pytest.skip(f"{LIVE_REDIS_ENV} is not set")
+    redis = pytest.importorskip("redis")
+
+    from finspeq.adapters.outbound.redis_window import RedisWindowStore
+
+    client = redis.Redis.from_url(url, db=LIVE_REDIS_DB)
+    client.flushdb()
+    return RedisWindowStore(client, TEST_TOPIC, allowed_lateness_s)
+
+
+@pytest.fixture(
+    params=[
+        _memory_store,
+        _fake_redis_store,
+        pytest.param(_live_redis_store, marks=pytest.mark.integration),
+    ],
+    ids=["memory", "fakeredis", "redis"],
+)
 def make_store(request: pytest.FixtureRequest) -> StoreFactory:
     """Return a factory that creates an empty store for the parametrized adapter."""
     factory: StoreFactory = request.param
