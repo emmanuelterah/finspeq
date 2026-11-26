@@ -121,6 +121,26 @@ class AmountToMeanRatio:
 
 
 @dataclass(frozen=True, slots=True)
+class AmountToMaxRatio:
+    """Ratio of tx's amount to the largest amount among the card's recent transactions."""
+
+    seconds: int
+
+    @property
+    def name(self) -> str:
+        """Return "amount_to_max_<duration>", for example "amount_to_max_24h"."""
+        return f"amount_to_max_{duration_label(self.seconds)}"
+
+    def compute(self, context: FeatureContext) -> float:
+        """Return amount / largest look-back amount, or 0.0 when there are no entries."""
+        entries = context.window.recent(self.seconds)
+        if not entries:
+            return 0.0
+        largest = max(entry.amount.cents for entry in entries)
+        return context.tx.amount.cents / largest
+
+
+@dataclass(frozen=True, slots=True)
 class SecondsSinceLast:
     """Seconds between the card's previous transaction in the window and tx."""
 
@@ -265,3 +285,24 @@ FEATURE_SET_V1 = FeatureSet(
         HomeMerchantDistanceKm(),
     ),
 )
+
+FEATURE_SET_V2 = FeatureSet(
+    version="v2",
+    features=(
+        AmountDollars(),
+        TxCount(SECONDS_PER_HOUR),
+        TxCount(WINDOW_SECONDS),
+        SpendDollars(SECONDS_PER_HOUR),
+        SpendDollars(WINDOW_SECONDS),
+        AmountToMeanRatio(WINDOW_SECONDS),
+        AmountToMaxRatio(WINDOW_SECONDS),
+        SecondsSinceLast(),
+        DistinctMerchants(WINDOW_SECONDS),
+        HourOfDayUtc(),
+        HomeMerchantDistanceKm(),
+    ),
+)
+
+FEATURE_SETS: dict[str, FeatureSet] = {
+    feature_set.version: feature_set for feature_set in (FEATURE_SET_V1, FEATURE_SET_V2)
+}

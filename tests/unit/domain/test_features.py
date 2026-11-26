@@ -14,7 +14,10 @@ from finspeq.domain.errors import (
 )
 from finspeq.domain.features import (
     FEATURE_SET_V1,
+    FEATURE_SET_V2,
+    FEATURE_SETS,
     AmountDollars,
+    AmountToMaxRatio,
     AmountToMeanRatio,
     CategoryCode,
     DistinctMerchants,
@@ -156,3 +159,19 @@ def test_feature_vector_rejects_non_finite_values() -> None:
     for bad in (math.nan, math.inf):
         with pytest.raises(InvalidFeatureVectorError):
             FeatureVector(schema="v1", values=(1.0, bad))
+
+
+def test_amount_to_max_ratio() -> None:
+    """Return 120 / max(20, 40, 60) = 2.0, and 0.0 for an empty window."""
+    feature = AmountToMaxRatio(WINDOW_SECONDS)
+    assert feature.name == "amount_to_max_24h"
+    assert feature.compute(CONTEXT) == 2.0
+    assert feature.compute(EMPTY) == 0.0
+
+
+def test_feature_set_v2_drops_category_and_adds_amount_to_max() -> None:
+    """Keep v2 free of category_code and register both versions."""
+    assert "category_code" not in FEATURE_SET_V2.names
+    assert "amount_to_max_24h" in FEATURE_SET_V2.names
+    assert len(FEATURE_SET_V2.names) == len(FEATURE_SET_V1.names)
+    assert FEATURE_SETS == {"v1": FEATURE_SET_V1, "v2": FEATURE_SET_V2}
