@@ -1,0 +1,25 @@
+# Data and build outputs
+data/
+models/*.onnx
+models/*.json
+*.csv
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.import_linter_cache/
+
+# Local settings and private planning (never pushed)
+.env
+.env.*
+!.env.example
+ROADMAP.md
+roadmap.md
+private/
