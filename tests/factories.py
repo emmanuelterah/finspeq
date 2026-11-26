@@ -1,7 +1,8 @@
-"""Builders of valid domain objects for tests."""
+"""Builders of valid domain objects and messages for tests."""
 
 from __future__ import annotations
 
+from finspeq.application.messages import Event, EventBatch, EventPosition
 from finspeq.domain.model import (
     CardId,
     Category,
@@ -50,3 +51,11 @@ def window_for(tx: Transaction, history: list[Transaction]) -> CardWindow:
         sorted((WindowEntry.from_transaction(h) for h in history), key=lambda e: e.order_key)
     )
     return CardWindow(card=tx.card, until=tx.order_key, entries=entries)
+
+
+def batch(*pairs: tuple[int, Transaction], partition: int = 0) -> EventBatch:
+    """Return a batch of events from (offset, transaction) pairs on one partition."""
+    events = tuple(
+        Event(position=EventPosition(partition, offset), transaction=tx) for offset, tx in pairs
+    )
+    return EventBatch(partition=partition, events=events)
