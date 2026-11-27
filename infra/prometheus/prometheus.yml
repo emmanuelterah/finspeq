@@ -1,0 +1,13 @@
+# Scrapes the processes that run on the host: the scoring API and the feature worker.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: finspeq-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:18000"]
+  - job_name: finspeq-worker
+    static_configs:
+      - targets: ["host.docker.internal:9101"]
