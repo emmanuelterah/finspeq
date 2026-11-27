@@ -1,18 +1,18 @@
-"""In-process implementation of WindowReader and WindowWriter."""
+"""In-process implementation of WindowReader, WindowWriter, and WindowAppender."""
 
 from __future__ import annotations
 
 from bisect import bisect_left, insort
 from enum import Enum
 
-from finspeq.application.errors import PositionGapError
-from finspeq.application.messages import ApplyResult, Event, EventBatch, EventPosition
-from finspeq.application.ports import WindowReader, WindowWriter
+from finspeq.application.messages import ApplyResult, EventBatch, EventPosition
+from finspeq.application.ports import WindowAppender, WindowReader, WindowWriter
+from finspeq.application.positions import unapplied_events
 from finspeq.domain.model import CardId, OrderKey, Transaction
 from finspeq.domain.window import WINDOW_SECONDS, CardWindow, WindowEntry
 
 
-class MemoryWindowStore(WindowReader, WindowWriter):
+class MemoryWindowStore(WindowReader, WindowWriter, WindowAppender):
     """Card windows and partition positions held in process memory."""
 
     def __init__(self, allowed_lateness_s: int = 0) -> None:
@@ -43,7 +43,7 @@ class MemoryWindowStore(WindowReader, WindowWriter):
         Raises:
             PositionGapError: The unapplied offsets do not continue from the stored position.
         """
-        pending = _unapplied(batch, self._positions.get(batch.partition))
+        pending = unapplied_events(batch, self._positions.get(batch.partition))
         if not pending:
             return ApplyResult(0, len(batch.events), self.position(batch.partition), 0)
         staging = _Staging(self._entries, self._newest)
@@ -55,6 +55,18 @@ class MemoryWindowStore(WindowReader, WindowWriter):
         self._newest.update(staging.newest)
         self._positions[batch.partition] = pending[-1].position.offset
         return ApplyResult(applied, len(batch.events) - applied, pending[-1].position, behind)
+
+    def append(self, tx: Transaction) -> bool:
+        """Store tx's entry and prune its card without changing any position.
+
+        Semantics match WindowAppender.append.
+        """
+        staging = _Staging(self._entries, self._newest)
+        stored = staging.add(tx) is not _Outcome.SKIPPED
+        staging.prune(WINDOW_SECONDS + self._lateness)
+        self._entries.update(staging.entries)
+        self._newest.update(staging.newest)
+        return stored
 
     def position(self, partition: int) -> EventPosition | None:
         """Return the last applied position for partition, or None if nothing was applied."""
@@ -113,29 +125,6 @@ class _Staging:
             staged = list(self._committed_entries.get(card, ()))
             self.entries[card] = staged
         return staged
-
-
-def _unapplied(batch: EventBatch, stored: int | None) -> tuple[Event, ...]:
-    """Return the batch events after the stored offset, checking they are consecutive.
-
-    Args:
-        batch: Batch to filter.
-        stored: Last applied offset for the batch's partition, or None if none.
-
-    Raises:
-        PositionGapError: An unapplied offset is not the previous offset plus one, or the first
-            one is not stored plus one.
-    """
-    pending = tuple(e for e in batch.events if stored is None or e.position.offset > stored)
-    expected = None if stored is None else stored + 1
-    for event in pending:
-        if expected is not None and event.position.offset != expected:
-            raise PositionGapError(
-                f"partition {batch.partition}: expected offset {expected}, "
-                f"got {event.position.offset}"
-            )
-        expected = event.position.offset + 1
-    return pending
 
 
 def _entry_epoch(entry: WindowEntry) -> int:

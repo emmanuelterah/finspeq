@@ -8,21 +8,36 @@ from pathlib import Path
 from typing import Protocol
 
 import fakeredis
+import psycopg
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 import redis
 
 from finspeq.adapters.outbound.memory_history import MemoryHistoricalSource, MemoryTrainingSink
+from finspeq.adapters.outbound.memory_ledger import MemoryLedger
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource, ParquetTrainingSink
+from finspeq.adapters.outbound.postgres_ledger import PostgresLedger
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.application.messages import LabeledTransaction, Split, TrainingRow
-from finspeq.application.ports import HistoricalSource, TrainingSink, WindowStore
+from finspeq.application.ports import (
+    DecisionLedger,
+    DecisionReader,
+    HistoricalSource,
+    TrainingSink,
+    WindowAppender,
+    WindowStore,
+)
 from finspeq.domain.features import FeatureVector
 from finspeq.domain.model import EventTime, TxId
 
-StoreFactory = Callable[[int], WindowStore]
+
+class AppendingStore(WindowStore, WindowAppender, Protocol):
+    """A window store that also implements WindowAppender, as every adapter here does."""
+
+
+StoreFactory = Callable[[int], AppendingStore]
 SourceFactory = Callable[[Sequence[LabeledTransaction]], HistoricalSource]
 SINK_SCHEMA = "v1"
 SINK_FEATURES = ("f0", "f1", "f2")
@@ -33,17 +48,17 @@ LIVE_REDIS_DB = 15
 TEST_TOPIC = "contract"
 
 
-def _memory_store(allowed_lateness_s: int) -> WindowStore:
+def _memory_store(allowed_lateness_s: int) -> AppendingStore:
     """Return a new MemoryWindowStore with the given allowed lateness."""
     return MemoryWindowStore(allowed_lateness_s=allowed_lateness_s)
 
 
-def _fake_redis_store(allowed_lateness_s: int) -> WindowStore:
+def _fake_redis_store(allowed_lateness_s: int) -> AppendingStore:
     """Return a RedisWindowStore over a new, empty in-process fakeredis server."""
     return RedisWindowStore(fakeredis.FakeRedis(), TEST_TOPIC, allowed_lateness_s)
 
 
-def _live_redis_store(allowed_lateness_s: int) -> WindowStore:
+def _live_redis_store(allowed_lateness_s: int) -> AppendingStore:
     """Return a RedisWindowStore over database 15 of the server in FINSPEQ_REDIS_URL, flushed."""
     url = os.environ.get(LIVE_REDIS_ENV)
     if not url:
@@ -65,6 +80,33 @@ def make_store(request: pytest.FixtureRequest) -> StoreFactory:
     """Return a factory that creates an empty store for the parametrized adapter."""
     factory: StoreFactory = request.param
     return factory
+
+
+class LedgerStore(DecisionLedger, DecisionReader, Protocol):
+    """A ledger that also implements DecisionReader, as every adapter here does."""
+
+
+LIVE_POSTGRES_ENV = "FINSPEQ_POSTGRES_DSN"
+SCHEMA_FILE = Path(__file__).parents[2] / "infra" / "postgres" / "init" / "001_schema.sql"
+
+
+@pytest.fixture(params=["memory", pytest.param("postgres", marks=pytest.mark.integration)])
+def ledger(request: pytest.FixtureRequest) -> LedgerStore:
+    """Return an empty ledger of the parametrized adapter.
+
+    The Postgres ledger uses the database in FINSPEQ_POSTGRES_DSN, creates the schema if it is
+    missing, and empties both tables.
+    """
+    if request.param == "memory":
+        return MemoryLedger()
+    dsn = os.environ.get(LIVE_POSTGRES_ENV)
+    if not dsn:
+        pytest.skip(f"{LIVE_POSTGRES_ENV} is not set")
+    connection = psycopg.connect(dsn, autocommit=True)
+    request.addfinalizer(connection.close)
+    connection.execute(SCHEMA_FILE.read_text(encoding="utf-8"))
+    connection.execute("TRUNCATE decisions, consumer_positions")
+    return PostgresLedger(connection, "contract", TEST_TOPIC)
 
 
 @pytest.fixture(params=["memory", "parquet"])

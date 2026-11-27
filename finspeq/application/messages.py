@@ -59,6 +59,18 @@ class EventBatch:
 
 
 @dataclass(frozen=True, slots=True)
+class LedgerRow:
+    """One recorded decision: the transaction's identity, its decision record, and position."""
+
+    tx_id: TxId
+    card: str
+    time: EventTime
+    amount_cents: int
+    record: DecisionRecord
+    position: EventPosition
+
+
+@dataclass(frozen=True, slots=True)
 class ApplyResult:
     """Outcome of storing one batch: counts and the stored position afterwards.
 

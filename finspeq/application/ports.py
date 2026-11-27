@@ -11,6 +11,7 @@ from finspeq.application.messages import (
     EventBatch,
     EventPosition,
     LabeledTransaction,
+    LedgerRow,
     ModelArtifact,
     ModelRef,
     ScoredSplit,
@@ -64,6 +65,24 @@ class WindowWriter(Protocol):
 
 class WindowStore(WindowReader, WindowWriter, Protocol):
     """A store that implements both window ports."""
+
+
+class WindowAppender(Protocol):
+    """Write access to one card window outside any partition position (read-your-writes)."""
+
+    def append(self, tx: Transaction) -> bool:
+        """Store tx's entry for its card and prune that card as WindowWriter.apply does.
+
+        No partition position changes. A transaction id already stored for the card keeps its
+        first entry, so a later apply of the same event stores nothing.
+
+        Returns:
+            True if the entry was stored; False if the card already held tx's id.
+
+        Raises:
+            StoreUnavailableError: The store did not respond. Nothing is written.
+        """
+        ...
 
 
 class FraudModel(Protocol):
@@ -154,6 +173,18 @@ class DecisionLedger(Protocol):
 
     def position(self, partition: int) -> EventPosition | None:
         """Return the last recorded position for partition, or None if nothing was recorded."""
+        ...
+
+
+class DecisionReader(Protocol):
+    """Read access to every recorded decision, for verification."""
+
+    def rows(self) -> Iterator[LedgerRow]:
+        """Yield every recorded decision in tx_id order.
+
+        Raises:
+            StoreUnavailableError: The database did not respond.
+        """
         ...
 
 

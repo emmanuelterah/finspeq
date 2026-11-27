@@ -1,4 +1,4 @@
-"""Redis implementation of WindowReader and WindowWriter, using two Lua scripts."""
+"""Redis implementation of the window ports, using three Lua scripts."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from finspeq.application.errors import (
     StoreUnavailableError,
 )
 from finspeq.application.messages import ApplyResult, EventBatch, EventPosition
-from finspeq.application.ports import WindowReader, WindowWriter
-from finspeq.domain.model import CardId, EventTime, Money, OrderKey, TxId
+from finspeq.application.ports import WindowAppender, WindowReader, WindowWriter
+from finspeq.domain.model import CardId, EventTime, Money, OrderKey, Transaction, TxId
 from finspeq.domain.window import WINDOW_SECONDS, CardWindow, WindowEntry
 
 DEFAULT_PREFIX = "fq:"
@@ -22,7 +22,7 @@ NO_POSITION = -1
 VALUE_SEPARATOR = "|"
 
 
-class RedisWindowStore(WindowReader, WindowWriter):
+class RedisWindowStore(WindowReader, WindowWriter, WindowAppender):
     """Card windows in a sorted set plus a hash per card, and one position key per partition.
 
     Requires a standalone Redis server: one batch touches keys of many cards.
@@ -50,6 +50,7 @@ class RedisWindowStore(WindowReader, WindowWriter):
         self._prefix = prefix
         self._apply_script = client.register_script(_lua("apply_batch.lua"))
         self._read_script = client.register_script(_lua("read_window.lua"))
+        self._append_script = client.register_script(_lua("append_event.lua"))
 
     def read(self, card: CardId, until: OrderKey) -> CardWindow:
         """Return the card's entries before `until` and within WINDOW_SECONDS of it.
@@ -108,6 +109,35 @@ class RedisWindowStore(WindowReader, WindowWriter):
             raise StoreUnavailableError(str(exc)) from exc
         position = None if last == NO_POSITION else EventPosition(batch.partition, int(last))
         return ApplyResult(int(applied), int(skipped), position, int(behind))
+
+    def append(self, tx: Transaction) -> bool:
+        """Store tx's entry and prune its card in one script call, without any position.
+
+        Semantics match WindowAppender.append.
+
+        Raises:
+            InvalidMessageError: The script rejected the argument list.
+            StoreUnavailableError: Redis did not respond. Nothing is written.
+        """
+        keys = [
+            self._card_key(tx.card, "ev"),
+            self._card_key(tx.card, "tx"),
+            self._card_key(tx.card, "newest"),
+        ]
+        args: list[str | int] = [
+            self._keep_seconds,
+            tx.tx_id.value,
+            tx.time.epoch_s,
+            tx.amount.cents,
+            tx.merchant,
+        ]
+        try:
+            stored = self._append_script(keys=keys, args=args)
+        except redis.ResponseError as exc:
+            raise InvalidMessageError(str(exc)) from exc
+        except (redis.ConnectionError, redis.TimeoutError) as exc:
+            raise StoreUnavailableError(str(exc)) from exc
+        return int(stored) == 1
 
     def position(self, partition: int) -> EventPosition | None:
         """Return the last applied position for partition, or None if nothing was applied.
