@@ -26,3 +26,5 @@ private/
 # Tool scratch and local run logs (may contain local paths)
 .tmp/
 notes/*.log
+notes/**/*.log
+notes/**/*.started
