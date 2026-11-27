@@ -15,16 +15,17 @@ to streaming systems. Each section opens with a plain-language summary, then goe
 8. [M3: late events and choosing allowed lateness](#8-m3-late-events-and-choosing-allowed-lateness)
 9. [M4: several workers, rebalances and the key](#9-m4-several-workers-rebalances-and-the-key)
 10. [M5: scoring live, the ledger and the race](#10-m5-scoring-live-the-ledger-and-the-race)
-11. [Engineering standards](#11-engineering-standards)
-12. [What comes next, and what we learned](#12-what-comes-next-and-what-we-learned)
-13. [Glossary](#13-glossary)
+11. [M6: operating it: drift, late labels, a shadow model](#11-m6-operating-it-drift-late-labels-a-shadow-model)
+12. [Engineering standards](#12-engineering-standards)
+13. [What we learned, and what is left](#13-what-we-learned-and-what-is-left)
+14. [Glossary](#14-glossary)
 
 ---
 
 ## 1. In one page
 
 Finspeq scores card payments for fraud as they stream in, and it is built so that replaying the
-same stream always gives the same answer, byte for byte. Six milestones (M0 to M5) are done, and
+same stream always gives the same answer, byte for byte. All seven milestones (M0 to M6) are done, and
 every guarantee below was measured on one laptop.
 
 > **In plain terms.** Imagine a bank's fraud checker that keeps a running notebook for each card:
@@ -47,11 +48,14 @@ falls behind, or is split across more consumers.
 | 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | 0 differences; up to 24,063 events/s |
 | Scoring API at 100 requests/s, decision logged before answering | p50 7.4 ms, p99 39 ms |
 | Decision ledger through 42 crashes and a Postgres SIGKILL | 124,146 rows, 0 missing, 0 duplicates |
+| Relay crashed 10 times: plain commits vs Kafka transactions | 2,000 duplicates vs 0 for `read_committed` readers |
+| Shadow model on 90,000 live requests | 99.65% same decisions, 1.7 ms extra per request (p50) |
+| Live feature vectors vs offline ones for the same payments | 15.4% differ under replay-speed load; drift monitoring flags exactly those features |
 
 **What it is built from.** Python 3.11, Redpanda (a Kafka-compatible event log), Redis, Postgres,
 LightGBM exported to ONNX, and Docker Compose. There is no stream-processing framework: the
 consumer loop, the atomic store, the crash drills and the replay checker are written by hand so
-every guarantee is visible in code. The package is about 5,400 lines, with 2,600 lines of tests.
+every guarantee is visible in code. The package is about 8,000 lines, with 3,900 lines of tests.
 
 ## 2. The problem: fraud scoring on a moving stream
 
@@ -600,13 +604,121 @@ returned, with latency up to 15 s. No decision was returned without a log entry,
 keeps answering 503 rather than inventing a fallback
 ([ADR-014](adr/014-broker-down-returns-503.md)). Full results: [notes/m5.md](../notes/m5.md).
 
-## 11. Engineering standards
+## 11. M6: operating it: drift, late labels, a shadow model
+
+The monitoring works, and it found a problem the offline data does not have: under replay-speed
+load, 15.4% of live feature vectors differ from the offline ones for the same payments, and the
+drift monitor flagged exactly those features.
+
+> **In plain terms.** Once a model is live, three questions matter. Is the incoming data still
+> like the data it learned from? Is it still catching fraud, when we only find out weeks later
+> which payments were fraud? Would a newer model do better? We built a check for each, plus a
+> dashboard. Because every payment can be recomputed from the log, we could also tell whether
+> a change came from the world or from our own system.
+
+### Drift: has the data moved?
+
+For each feature, the training data is cut into ten equal-sized buckets. The population
+stability index (PSI) compares how a month's (or a day's) values spread over those buckets with
+how the training data did; above 0.2 is an alert. About 60 lines of plain Python, no monitoring
+library ([ADR-017](adr/017-drift-checked-against-offline-vectors.md)).
+
+| Data | What alerted |
+|---|---|
+| Monthly dataset parts, Jan 2025 – Jun 2026 | `hour_of_day_utc` in 15 of 18 months; the 24 h counts in December to February |
+| Ledger vectors, 63 days of live scoring | `hour_of_day_utc` every day, plus `secs_since_last` (45 days) and the 1 h counts (35–36 days) |
+
+The hour alert is real: in most months nearly all payments fall in one block of UTC hours,
+21:00–08:00 or 09:00–20:00 (99.5% night in April 2025, 99.7% day in April 2026), and test
+recall still holds at about 93%. Drift starts an investigation; it is not proof the model is
+failing.
+
+### Drift or a bug? Comparing live with offline
+
+The live alerts on `secs_since_last` and the 1 h counts do not appear offline for the same
+months. Because the system is deterministic, every live payment also has an offline feature
+vector computed from full history. Joining the two by transaction id:
+
+| Feature | Live value differs | PSI live | PSI offline |
+|---|---|---|---|
+| `secs_since_last` | 14.4% | 0.239 | 0.011 |
+| `tx_count_1h` | 12.3% | 0.127 | 0.007 |
+| `tx_count_24h` | 15.4% | 0.093 | 0.050 |
+| `amount_dollars`, `hour_of_day_utc`, `home_merchant_km` | 0% | equal | equal |
+
+15.4% of vectors differ, close to the 13–18% stale reads the load generator measured: the API
+read a card's window before the worker had applied the card's previous payment (the M5 race).
+Replaying history at 200 requests a second packs a card's payments much closer together than
+real traffic does. Features that need no history never differ. Same PSI in both means the data
+changed; PSI only in the live vectors means the serving path computed something different
+(training/serving skew).
+
+### Late labels: is it still catching fraud?
+
+A fraud is confirmed when the chargeback arrives, simulated here as 7 to 60 days later (most
+often 21). Recall over the last 30 days, as it would be known each week:
+
+| As of | Labels arrived | Recall seen | True recall |
+|---|---|---|---|
+| 2026-03-31 | 15.5% | 94.1% | 94.3% |
+| 2026-05-26 | 15.7% | 92.7% | 93.9% |
+| 2026-06-23 | 32.1% | 95.0% | 93.6% |
+
+On any day only 15–19% of the last month's frauds are labelled, yet the recall seen stays within
+1.8 points of the truth, because in this simulation the delay is unrelated to whether the model
+caught the fraud. Late labels shrink the sample; they would bias it only if caught frauds were
+confirmed faster than missed ones. Drift is the early signal, and recall confirms it weeks later.
+
+### A shadow model: would a newer one be better?
+
+The API scores every request with a second model on the same feature vector and records its
+verdict next to the real one; the shadow never changes the decision, and if it fails only its
+verdict is dropped. On 90,000 requests with 773 frauds:
+
+| | Live model | Shadow (`v2-sqrt`) |
+|---|---|---|
+| Fraud flagged | 89.4% | 88.7% |
+| Legitimate flagged | 0.65% | 0.66% |
+| Same decision | 99.65% of requests | |
+
+The candidate is not better, so the live model stays. The shadow costs one more prediction,
+1.7 ms per request at the median. End-to-end latency in these runs is not a result: the laptop
+was saturated at 200 requests a second even without the shadow, with Prometheus, Grafana, the
+worker and the load generator sharing it.
+
+### Kafka transactions: another route to exactly-once
+
+Kafka can commit a batch of output records and the input positions in one transaction. A relay
+that copies events to a second topic was crashed 10 times in each style:
+
+| | Plain: write, then commit | Kafka transaction |
+|---|---|---|
+| Extra copies seen by `read_committed` readers | 2,000 | **0** |
+| Extra copies seen by `read_uncommitted` readers | 2,000 | 2,000 (aborted batches stay in the log) |
+| Throughput without crashes | 13,063–13,299 events/s | 6,903–11,717 events/s |
+
+Transactions work only when the output is Kafka and every reader uses `read_committed`. The
+feature and ledger workers write to Redis and Postgres, which a Kafka transaction cannot
+include, so they keep their positions in the store they write
+([ADR-015](adr/015-stored-positions-over-kafka-transactions.md)).
+
+### The envelope and the dashboard
+
+msgspec decodes the event envelope about 10 times faster than the standard-library codec (3.8
+vs 37.6 µs), but decoding is 0.04 ms of a request that spends 5–9 ms reading Redis and
+publishing, and MessagePack saves only 6% of the bytes. The envelope stays JSON
+([ADR-016](adr/016-envelope-stays-json.md)). `docker compose --profile observability up -d`
+starts Prometheus, which scrapes the API and the worker, and Grafana with a provisioned 9-panel
+dashboard: decisions per second, per-step latency, window size, apply rate and latency, late and
+out-of-order events, and shadow decisions. Full results: [notes/m6.md](../notes/m6.md).
+
+## 12. Engineering standards
 
 Every rule in the codebase is enforced by a tool in CI, not by memory, and determinism is designed
 in rather than tested in afterwards.
 
 > **In plain terms.** A robot checks every change before it is accepted: formatting, typing,
-> structure, line length and about 200 tests. If the robot objects, the change does not go in.
+> structure, line length and about 270 tests. If the robot objects, the change does not go in.
 
 ### What CI checks
 
@@ -618,8 +730,8 @@ One command, `python scripts/ci.py`, runs these in order and stops at the first 
 3. **Types:** `mypy` in strict mode over the package, tests, scripts and experiments.
 4. **Layers:** `import-linter`'s three architecture contracts.
 5. **Line length:** at most 100 characters in Python and shell files.
-6. **Tests:** unit, contract, adapter and script suites (249 passing); integration suites run separately
-   against the Docker stack.
+6. **Tests:** unit, contract, adapter, experiment and script suites (267 passing);
+   integration suites run separately against the Docker stack.
 
 ### House rules
 
@@ -654,21 +766,21 @@ See [CODING_STANDARDS.md](../CODING_STANDARDS.md).
 | Replay | Level A and Level B equality checks against the memory reference |
 | Drills | Crash, kill and disorder scripts whose reports are committed in `notes/` |
 
-Fourteen [architecture decision records](adr/) document the choices that shape the system, each
+Seventeen [architecture decision records](adr/) document the choices that shape the system, each
 with its context and consequences.
 
-## 12. What comes next, and what we learned
+## 13. What we learned, and what is left
 
-The core milestones are done; what remains is optional operations work;
-the main lessons so far are about where guarantees really come from.
+All milestones are done; the main lessons are about where guarantees really come from.
 
-### Next milestones
+### What is left
 
-| Milestone | Goal | The question it answers |
-|---|---|---|
-| M6 (optional) | Drift reports, dashboards, a shadow model, delayed labels | How does the model age, and how would we know? |
+- A clean latency run of the shadow model on a machine that is not also running the load.
+- A consumer-lag metric for the dashboard (lag is measured by a script today).
+- Retraining with the measured staleness, if real traffic ever shows a same-card rate near the
+  replay's.
 
-### Lessons so far
+### Lessons
 
 1. **Store the bookmark with the data.** Almost every guarantee here follows from writing the log
    position in the same atomic step as the state. Kafka's own offset was wrong after every crash.
@@ -684,14 +796,19 @@ the main lessons so far are about where guarantees really come from.
    the test client.
 7. **Reference implementations pay for themselves.** The in-memory store is short, obviously
    correct, and the yardstick for every check.
+8. **Replayability makes monitoring honest.** A drift alert alone cannot say whether the world
+   changed or the system did; recomputing the same payments offline can.
+9. **Exactly-once is a property of a boundary.** Kafka transactions give it between topics, for
+   readers that ask for committed data; anything that leaves Kafka needs its own bookmark.
 
-## 13. Glossary
+## 14. Glossary
 
 | Term | Meaning |
 |---|---|
 | Adapter | Code that connects a port to a real technology, such as Redis or Kafka |
 | Allowed lateness | How far behind the newest event time an event may arrive and still find its history kept |
 | At-least-once delivery | Every message arrives, but some may arrive more than once after a failure |
+| Chargeback | A cardholder's dispute that confirms fraud, often weeks after the payment |
 | Composition root | The one place in a program where all the parts are created and connected |
 | Consumer group | Several readers sharing a topic, each partition read by one of them |
 | Effectively once | At-least-once delivery plus writes that ignore repeats, so each event counts once |
@@ -700,12 +817,16 @@ the main lessons so far are about where guarantees really come from.
 | Feature | A number the model looks at, such as spend in the last hour |
 | Idempotent | Doing it twice has the same effect as doing it once |
 | Offset | An event's position number within a partition |
+| PSI | Population stability index: how far a feature's spread over fixed buckets has moved from training |
 | ONNX | A portable format for running trained models quickly |
 | Partition | One ordered lane of a topic; all of a card's events share one |
 | Port | A small interface the core needs, such as "read a card's window" |
 | PR-AUC | A score from 0 to 1 of how well a model ranks fraud above legitimate payments when fraud is rare |
+| `read_committed` | A reader setting that hides records from Kafka transactions that were aborted or are still open |
 | Rebalance | Reassigning partitions when a reader joins or leaves the group |
 | Recall | The share of fraud the system catches |
 | Replay equality | The core promise: same log in, same state and decisions out |
+| Shadow model | A second model that scores live traffic without affecting any decision |
+| Training/serving skew | Live features computed differently from the training features for the same input |
 | Watermark | The newest event time seen, used to decide what counts as late |
 | Window | A card's payments in the 24 hours before the current one |

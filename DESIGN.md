@@ -250,6 +250,8 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 ### Optional M6
 
 Evidently drift reports, Grafana, a second model in shadow mode, delayed-label simulation.
+Built in M6 with PSI in place of Evidently (ADR-017); also Kafka transactions for a
+Kafka-to-Kafka relay (ADR-015) and the envelope benchmark (ADR-016). Results: `notes/m6.md`.
 
 ---
 

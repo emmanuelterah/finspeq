@@ -32,6 +32,10 @@ Every number below comes from a run on one laptop. The raw reports are in [`note
 | Scoring API at 100 requests/s, decision logged before answering | p50 **7.4 ms**, p99 **39 ms** |
 | Decision ledger through 42 crashes and a Postgres SIGKILL | **124,146** rows, **0** missing, **0** duplicates |
 | Broker stopped for 10 s at 200 requests/s | **80** requests refused (503), **0** decisions returned without a log entry |
+| Relay crashed 10 times: plain commits vs Kafka transactions | **2,000** duplicate records vs **0** for `read_committed` readers |
+| Shadow model on 90,000 live requests | **99.65%** same decisions; costs one extra predict (**1.7 ms** p50) |
+| Live feature vectors vs offline ones for the same events | **15.4%** differ under replay-speed load; the drift monitor flags them, the offline data does not |
+| Chargebacks arriving 7–60 days late | Recall seen on the labels so far stays within **1.8** points of the true recall |
 
 ## The idea in one picture
 
@@ -110,16 +114,31 @@ finspeq-stream verify-ledger                # compare the ledger with the log
 </details>
 
 <details>
-<summary><b>Run the crash, disorder, scaling and hot-path drills (M2 to M5)</b></summary>
+<summary><b>Monitoring: drift, a shadow model, dashboards (M6)</b></summary>
+
+```bash
+finspeq-offline drift                                # PSI per feature and month vs TRAIN
+finspeq-offline delayed-labels --model-dir models/<version>
+finspeq-serve --model-dir models/<live> --shadow-model-dir models/<candidate> --port 18000
+finspeq-stream shadow-report                         # live vs shadow decisions, with labels
+finspeq-stream drift-ledger                          # daily PSI of the recorded vectors
+docker compose --profile observability up -d         # Prometheus :9090, Grafana :3000
+```
+
+</details>
+
+<details>
+<summary><b>Run the crash, disorder, scaling, hot-path and operations drills (M2 to M6)</b></summary>
 
 ```bash
 bash scripts/m2_drills.sh    # crashes, naive counter, Redis kill, full rebuild
 bash scripts/m3_drills.sh    # delayed and duplicated events, lateness sweep
 bash scripts/m4_drills.sh    # partitions, workers, rebalances, zombie, live load
 bash scripts/m5_drills.sh    # latency, the race, broker down, ledger under crashes
+bash scripts/m6_drills.sh    # drift, delayed labels, shadow, Kafka transactions, Grafana
 ```
 
-Reports land in `notes/m2/` to `notes/m5/`.
+Reports land in `notes/m2/` to `notes/m6/`.
 
 </details>
 
@@ -147,6 +166,10 @@ Reports land in `notes/m2/` to `notes/m5/`.
    ([ADR-013](docs/adr/013-single-writer-and-measured-staleness.md)).
 7. **Late events are welcome.** Entries are kept for 24 h plus one hour of allowed lateness, and
    late events are applied, never dropped ([ADR-011](docs/adr/011-allowed-lateness.md)).
+8. **Drift is checked against a replay.** PSI per feature flags changes; because every event can
+   be recomputed offline, a live alert is compared with the offline features of the same events
+   to tell real drift from a serving bug
+   ([ADR-017](docs/adr/017-drift-checked-against-offline-vectors.md)).
 
 The full story, with the reasoning behind each choice, is in the
 **[project write-up](docs/WRITEUP.md)**.
@@ -161,7 +184,7 @@ The full story, with the reasoning behind each choice, is in the
 | M3 | Disorder and lateness | Exact replays with late and duplicate events; lateness chosen from data | Done |
 | M4 | Scaling out | Exact state through rebalances and zombies; why the key matters | Done |
 | M5 | Hot path | Logged decisions in milliseconds, an exact ledger, the race measured | Done |
-| M6 | Operations | Drift reports, dashboards, a shadow model | Next (optional) |
+| M6 | Operations | Drift vs skew, delayed labels, a shadow model, Kafka transactions, Grafana | Done |
 
 ## Project layout
 
@@ -174,8 +197,9 @@ finspeq/
   bootstrap/     one composition root per process: offline.py, streaming.py, serving.py
 tests/           unit, contract (one suite per port, run against every adapter), integration
 scripts/         CI, data preparation, crash drills
-experiments/     the deliberately wrong naive counter used as a baseline in M2
-docs/adr/        fourteen architecture decision records
+experiments/     the naive counter (M2) and the Kafka-transactions relay (M6)
+infra/           Postgres schema, Prometheus config, provisioned Grafana dashboard
+docs/adr/        seventeen architecture decision records
 notes/           results of every milestone, with raw JSON reports
 ```
 
@@ -190,7 +214,7 @@ The dependency rule (domain ← application ← adapters ← bootstrap) is enfor
   characters, every module, class and function documented.
 - Determinism by construction: integer cents for money, event time only, seeded randomness, LF
   line endings, content-hashed datasets and models.
-- `python scripts/ci.py` runs format, lint, types, layer contracts, line length and about 200
+- `python scripts/ci.py` runs format, lint, types, layer contracts, line length and about 270
   tests. See [CODING_STANDARDS.md](CODING_STANDARDS.md).
 
 ## Read more
@@ -201,7 +225,7 @@ The dependency rule (domain ← application ← adapters ← bootstrap) is enfor
 | [DESIGN.md](DESIGN.md) | Goals, the core invariant, data profile, milestone plan |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Hexagonal design, SOLID, ACID analysis, failure modes |
 | [docs/adr/](docs/adr/) | Every significant decision, with context and consequences |
-| [notes/](notes/) | Measured results of M0 to M5 |
+| [notes/](notes/) | Measured results of M0 to M6 |
 
 ## Data
 

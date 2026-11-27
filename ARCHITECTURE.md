@@ -520,6 +520,9 @@ the API fill it with the vector, score, decision, and model version.
 | 012 | Keyed partitioning required; recovery never depends on partition ownership | Accepted |
 | 013 | One writer per card; hot-path staleness is measured, not removed | Accepted |
 | 014 | When the broker is down, the API answers 503 | Accepted |
+| 015 | Positions stay with the state; Kafka transactions only for Kafka-to-Kafka steps | Accepted |
+| 016 | The event envelope stays JSON | Accepted |
+| 017 | Drift is measured by PSI, and live drift is checked against offline vectors | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 
@@ -530,4 +533,5 @@ Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, conse
 1. ~~Allowed-lateness value and late-event policy.~~ Decided in M3: 1 h, apply (ADR-011).
 2. ~~The hot path when the broker is down.~~ Decided in M5: 503 (ADR-014).
 3. ~~Async versus sync FastAPI route.~~ Sync route kept in M5; async not benchmarked.
-4. JSON versus a binary envelope (`msgspec`) if serialization shows up in profiles.
+4. ~~JSON versus a binary envelope (`msgspec`) if serialization shows up in profiles.~~ Decided
+   in M6: JSON (ADR-016).
