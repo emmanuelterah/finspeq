@@ -13,23 +13,36 @@ from finspeq.application.ports import (
     WindowAppender,
     WindowReader,
 )
-from finspeq.domain.features import FeatureSet
+from finspeq.domain.features import FeatureSet, FeatureVector
 from finspeq.domain.model import Transaction
 from finspeq.domain.policy import DecisionPolicy
-from finspeq.domain.scored import DecisionRecord, ScoredTransaction
+from finspeq.domain.scored import DecisionRecord, ScoredTransaction, ShadowDecision
 
 MILLISECONDS_PER_SECOND = 1_000.0
 
 
 @dataclass(frozen=True, slots=True)
+class ShadowScoring:
+    """A second model and its thresholds, scored alongside the live model."""
+
+    model: FraudModel
+    policy: DecisionPolicy
+
+
+@dataclass(frozen=True, slots=True)
 class ScoringDeps:
-    """What scoring reads and writes: windows, features, model, thresholds, and the log."""
+    """What scoring reads and writes: windows, features, model, thresholds, and the log.
+
+    shadow, when given, is scored on the same vector and recorded beside the live decision;
+    it never changes the decision, and a failure in it only drops the shadow verdict.
+    """
 
     reader: WindowReader
     feature_set: FeatureSet
     model: FraudModel
     policy: DecisionPolicy
     publisher: EventPublisher
+    shadow: ShadowScoring | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,8 +53,8 @@ class ScoreOutcome:
         scored: The transaction and its decision record.
         position: Where the scored event was logged.
         window_entries: Entries in the window the features were computed from.
-        step_ms: Milliseconds per step, in order: read, features, predict, publish, and
-            append when read-your-writes is on.
+        step_ms: Milliseconds per step, in order: read, features, predict, shadow (with a
+            shadow model), publish, and append (with read-your-writes).
     """
 
     scored: ScoredTransaction
@@ -68,8 +81,9 @@ class ScoreTransaction:
 
         Args:
             deps: Window reader, feature set, model, policy, and publisher.
-            metrics: Receives fq_step_ms (label step: read, features, predict, publish,
-                append), fq_window_entries, and fq_decisions_total (label decision).
+            metrics: Receives fq_step_ms (label step: read, features, predict, shadow,
+                publish, append), fq_window_entries, fq_decisions_total (label decision),
+                fq_shadow_decisions_total (label decision), and fq_shadow_errors_total.
             clock: Times each step.
             appender: Writes the scored event to the window store after the log ack; None
                 leaves the store to the feature worker alone.
@@ -98,7 +112,11 @@ class ScoreTransaction:
         score = deps.model.predict(vector)
         decision = deps.policy.decide(score)
         predict_done = self._step("predict", features_done, steps)
-        record = DecisionRecord(vector, score, decision, deps.model.version)
+        shadow = None
+        if deps.shadow is not None:
+            shadow = self._shadow(deps.shadow, vector)
+            predict_done = self._step("shadow", predict_done, steps)
+        record = DecisionRecord(vector, score, decision, deps.model.version, shadow)
         scored = ScoredTransaction(tx, record)
         position = deps.publisher.publish_scored(scored)
         publish_done = self._step("publish", predict_done, steps)
@@ -108,6 +126,17 @@ class ScoreTransaction:
         self._metrics.observe("fq_window_entries", float(len(window.entries)))
         self._metrics.increment("fq_decisions_total", 1.0, {"decision": decision.value})
         return ScoreOutcome(scored, position, len(window.entries), tuple(steps))
+
+    def _shadow(self, shadow: ShadowScoring, vector: FeatureVector) -> ShadowDecision | None:
+        """Return the shadow model's verdict on vector, or None (counted) if it fails."""
+        try:
+            score = shadow.model.predict(vector)
+        except Exception:
+            self._metrics.increment("fq_shadow_errors_total")
+            return None
+        decision = shadow.policy.decide(score)
+        self._metrics.increment("fq_shadow_decisions_total", 1.0, {"decision": decision.value})
+        return ShadowDecision(score, decision, shadow.model.version)
 
     def _step(self, name: str, started: float, steps: list[tuple[str, float]]) -> float:
         """Record the milliseconds since started as step `name` in metrics and steps.

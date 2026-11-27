@@ -30,6 +30,7 @@ class ServeSettings:
         read_your_writes: Also write each scored event to Redis after the log ack.
         linger_ms: Producer linger.
         publish_timeout_s: Longest wait for one broker acknowledgement.
+        shadow_model_dir: Exported model scored alongside the live one, or None.
     """
 
     model_dir: Path
@@ -40,6 +41,7 @@ class ServeSettings:
     read_your_writes: bool
     linger_ms: int
     publish_timeout_s: float
+    shadow_model_dir: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +70,7 @@ def parse(argv: Sequence[str]) -> ServeCommand:
     )
     parser.add_argument("--linger-ms", type=int, default=DEFAULT_LINGER_MS)
     parser.add_argument("--publish-timeout-s", type=float, default=DEFAULT_PUBLISH_TIMEOUT_S)
+    parser.add_argument("--shadow-model-dir", type=Path, help="score a second model alongside")
     args = parser.parse_args(list(argv))
     settings = ServeSettings(
         model_dir=args.model_dir,
@@ -78,6 +81,7 @@ def parse(argv: Sequence[str]) -> ServeCommand:
         read_your_writes=args.read_your_writes,
         linger_ms=args.linger_ms,
         publish_timeout_s=args.publish_timeout_s,
+        shadow_model_dir=args.shadow_model_dir,
     )
     return ServeCommand(args.host, args.port, args.workers, settings)
 
@@ -93,6 +97,9 @@ def to_environment(settings: ServeSettings) -> dict[str, str]:
         f"{ENV_PREFIX}READ_YOUR_WRITES": TRUE_TEXT if settings.read_your_writes else "0",
         f"{ENV_PREFIX}LINGER_MS": str(settings.linger_ms),
         f"{ENV_PREFIX}PUBLISH_TIMEOUT_S": str(settings.publish_timeout_s),
+        f"{ENV_PREFIX}SHADOW_MODEL_DIR": ""
+        if settings.shadow_model_dir is None
+        else settings.shadow_model_dir.as_posix(),
     }
 
 
@@ -116,4 +123,5 @@ def from_environment(environment: Mapping[str, str]) -> ServeSettings:
         read_your_writes=value("READ_YOUR_WRITES", "0") == TRUE_TEXT,
         linger_ms=int(value("LINGER_MS", str(DEFAULT_LINGER_MS))),
         publish_timeout_s=float(value("PUBLISH_TIMEOUT_S", str(DEFAULT_PUBLISH_TIMEOUT_S))),
+        shadow_model_dir=Path(shadow) if (shadow := value("SHADOW_MODEL_DIR", "")) else None,
     )

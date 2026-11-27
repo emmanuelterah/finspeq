@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from finspeq.adapters.inbound.faults import CrashPoint, FaultPlan
 from finspeq.adapters.inbound.selection import (
+    DEFAULT_SOURCE,
     EventSelection,
     add_disorder,
     add_selection,
@@ -112,6 +114,27 @@ class VerifyLedgerCommand:
     consumer: str
 
 
+@dataclass(frozen=True, slots=True)
+class DriftLedgerCommand:
+    """Arguments of `drift-ledger`: daily PSI of the ledger's feature vectors."""
+
+    dsn: str
+    reference: Path
+    alert_psi: float
+    min_rows: int
+    output: Path
+    fail_on_alert: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowReportCommand:
+    """Arguments of `shadow-report`: compare live and shadow decisions in the ledger."""
+
+    dsn: str
+    source: Path
+    output: Path
+
+
 StreamCommand = (
     SimulateCommand
     | WorkerCommand
@@ -119,6 +142,8 @@ StreamCommand = (
     | VerifyStateCommand
     | LedgerCommand
     | VerifyLedgerCommand
+    | DriftLedgerCommand
+    | ShadowReportCommand
 )
 DEFAULT_DSN = "postgresql://finspeq:finspeq@127.0.0.1:15432/finspeq"
 DEFAULT_LEDGER_CONSUMER = "ledger"
@@ -182,7 +207,7 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
 
 
 def add_ledger_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ledger and verify-ledger sub-commands."""
+    """Add the ledger, verify-ledger, drift-ledger, and shadow-report sub-commands."""
     ledger = commands.add_parser("ledger", help="record scored events in Postgres")
     _add_broker(ledger)
     ledger.add_argument("--group", default="finspeq-ledger")
@@ -199,6 +224,17 @@ def add_ledger_commands(commands: argparse._SubParsersAction[argparse.ArgumentPa
     verify.add_argument("--partitions", type=int, default=1)
     verify.add_argument("--dsn", default=DEFAULT_DSN)
     verify.add_argument("--consumer", default=DEFAULT_LEDGER_CONSUMER)
+    drift = commands.add_parser("drift-ledger", help="daily PSI of recorded feature vectors")
+    drift.add_argument("--dsn", default=DEFAULT_DSN)
+    drift.add_argument("--reference", type=Path, default=Path("notes/m6/drift_reference.json"))
+    drift.add_argument("--alert-psi", type=float, default=0.2)
+    drift.add_argument("--min-rows", type=int, default=1_000, help="skip smaller days")
+    drift.add_argument("--output", type=Path, default=Path("notes/m6/drift_ledger.json"))
+    drift.add_argument("--fail-on-alert", action="store_true", help="exit 1 on any alert")
+    shadow = commands.add_parser("shadow-report", help="live vs shadow decisions, with labels")
+    shadow.add_argument("--dsn", default=DEFAULT_DSN)
+    shadow.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    shadow.add_argument("--output", type=Path, default=Path("notes/m6/shadow_report.json"))
 
 
 def parse(argv: Sequence[str]) -> StreamCommand:
@@ -291,6 +327,17 @@ def _ledger_command_from(args: argparse.Namespace) -> StreamCommand | None:
             args.idle_exit_s,
             args.start_timeout_s,
             plan,
+        )
+    if args.command == "shadow-report":
+        return ShadowReportCommand(args.dsn, args.source, args.output)
+    if args.command == "drift-ledger":
+        return DriftLedgerCommand(
+            args.dsn,
+            args.reference,
+            args.alert_psi,
+            args.min_rows,
+            args.output,
+            args.fail_on_alert,
         )
     if args.command == "verify-ledger":
         return VerifyLedgerCommand(

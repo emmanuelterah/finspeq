@@ -9,7 +9,7 @@ import pytest
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.application.errors import PublishFailedError
 from finspeq.application.messages import EventPosition
-from finspeq.application.score import ScoreTransaction, ScoringDeps
+from finspeq.application.score import ScoreTransaction, ScoringDeps, ShadowScoring
 from finspeq.domain.features import FEATURE_SET_V2, FeatureVector
 from finspeq.domain.model import Transaction
 from finspeq.domain.policy import Decision, DecisionPolicy, Score, Thresholds
@@ -132,3 +132,59 @@ def test_failed_publish_returns_nothing_and_appends_nothing() -> None:
         use_case.execute(make_tx(1, BASE_TIME))
     probe = make_tx(9, BASE_TIME + 10)
     assert store.read(probe.card, probe.order_key).entries == ()
+
+
+class BrokenModel:
+    """FraudModel that always fails."""
+
+    version = "broken"
+    schema = "v2"
+
+    def predict(self, vector: FeatureVector) -> Score:
+        """Raise RuntimeError."""
+        raise RuntimeError(f"cannot score {vector.schema}")
+
+
+def test_shadow_verdict_is_recorded_beside_the_live_decision() -> None:
+    """Record the shadow model's decision without changing the live one."""
+    store = MemoryWindowStore()
+    store.apply(batch((0, make_tx(1, BASE_TIME - 60)), (1, make_tx(2, BASE_TIME - 30))))
+    strict = DecisionPolicy(Thresholds(0.1, 0.2))
+    deps = ScoringDeps(
+        store,
+        FEATURE_SET_V2,
+        CountModel(),
+        DecisionPolicy(Thresholds(0.3, 0.5)),
+        ListPublisher(),
+        ShadowScoring(CountModel(), strict),
+    )
+    metrics = RecordingMetrics()
+    outcome = ScoreTransaction(deps, metrics, TickClock()).execute(make_tx(3, BASE_TIME))
+    record = outcome.scored.record
+    assert record.decision is Decision.REVIEW
+    assert record.shadow is not None and record.shadow.decision is Decision.BLOCK
+    assert [name for name, _ in outcome.step_ms] == [
+        "read",
+        "features",
+        "predict",
+        "shadow",
+        "publish",
+    ]
+    assert metrics.counters["fq_shadow_decisions_total:BLOCK"] == 1.0
+
+
+def test_failing_shadow_drops_only_the_shadow_verdict() -> None:
+    """Keep scoring and publishing when the shadow model raises; count the error."""
+    store = MemoryWindowStore()
+    deps = ScoringDeps(
+        store,
+        FEATURE_SET_V2,
+        CountModel(),
+        DecisionPolicy(Thresholds(0.3, 0.5)),
+        ListPublisher(),
+        ShadowScoring(BrokenModel(), DecisionPolicy(Thresholds(0.1, 0.2))),
+    )
+    metrics = RecordingMetrics()
+    outcome = ScoreTransaction(deps, metrics, TickClock()).execute(make_tx(1, BASE_TIME))
+    assert outcome.scored.record.shadow is None
+    assert metrics.counters["fq_shadow_errors_total:"] == 1.0

@@ -20,8 +20,9 @@ from finspeq.application.positions import unapplied_events
 from finspeq.domain.features import FeatureVector
 from finspeq.domain.model import EventTime, TxId
 from finspeq.domain.policy import Decision, Score
-from finspeq.domain.scored import DecisionRecord
+from finspeq.domain.scored import DecisionRecord, ShadowDecision
 
+INSERT_COLUMNS = 14
 LOCK_POSITION = "SELECT pg_advisory_xact_lock(hashtext(%s))"
 SELECT_POSITION = """
 SELECT last_offset FROM consumer_positions
@@ -30,11 +31,13 @@ WHERE consumer = %s AND topic = %s AND topic_partition = %s
 INSERT_DECISIONS = """
 INSERT INTO decisions (
     tx_id, card, event_time, amount_cents, fraud_probability, decision, model_version,
-    feature_schema, features, topic_partition, topic_offset
+    feature_schema, features, topic_partition, topic_offset,
+    shadow_probability, shadow_decision, shadow_model_version
 )
 SELECT * FROM unnest(
     %s::char(32)[], %s::varchar(19)[], %s::bigint[], %s::bigint[], %s::double precision[],
-    %s::text[], %s::text[], %s::text[], %s::jsonb[], %s::integer[], %s::bigint[]
+    %s::text[], %s::text[], %s::text[], %s::jsonb[], %s::integer[], %s::bigint[],
+    %s::double precision[], %s::text[], %s::text[]
 )
 ON CONFLICT (tx_id) DO NOTHING
 """
@@ -45,7 +48,8 @@ ON CONFLICT (consumer, topic, topic_partition) DO UPDATE SET last_offset = EXCLU
 """
 SELECT_ROWS = """
 SELECT tx_id, card, event_time, amount_cents, fraud_probability, decision, model_version,
-       feature_schema, features, topic_partition, topic_offset
+       feature_schema, features, topic_partition, topic_offset,
+       shadow_probability, shadow_decision, shadow_model_version
 FROM decisions ORDER BY tx_id
 """
 
@@ -54,7 +58,8 @@ class PostgresLedger(DecisionLedger, DecisionReader):
     """Decisions in the `decisions` table and positions in `consumer_positions`.
 
     Each record() call is one SQL transaction: lock the partition's position, check offsets,
-    insert the new rows (the first row of a tx_id wins), and store the position.
+    insert the new rows (the first row of a tx_id wins), and store the position. Needs the
+    schema of infra/postgres/init/001_schema.sql and 002_shadow.sql.
     """
 
     def __init__(self, connection: psycopg.Connection, consumer: str, topic: str) -> None:
@@ -134,8 +139,8 @@ class PostgresLedger(DecisionLedger, DecisionReader):
 
 
 def _columns(events: tuple[Event, ...]) -> tuple[list[object], ...]:
-    """Return the eleven column arrays of INSERT_DECISIONS for the scored events."""
-    columns: tuple[list[object], ...] = tuple([] for _ in range(11))
+    """Return the fourteen column arrays of INSERT_DECISIONS for the scored events."""
+    columns: tuple[list[object], ...] = tuple([] for _ in range(INSERT_COLUMNS))
     for event in events:
         tx, record = event.transaction, event.record
         if record is None:
@@ -152,6 +157,9 @@ def _columns(events: tuple[Event, ...]) -> tuple[list[object], ...]:
             json.dumps(list(record.vector.values)),
             event.position.partition,
             event.position.offset,
+            None if record.shadow is None else record.shadow.score.fraud_probability,
+            None if record.shadow is None else record.shadow.decision.value,
+            None if record.shadow is None else record.shadow.model_version,
         )
         for column, value in zip(columns, values, strict=True):
             column.append(value)
@@ -160,13 +168,20 @@ def _columns(events: tuple[Event, ...]) -> tuple[list[object], ...]:
 
 def _ledger_row(row: tuple[object, ...]) -> LedgerRow:
     """Return the LedgerRow stored in one SELECT_ROWS result row."""
-    (tx_id, card, time, cents, probability, decision, model, schema, features, part, off) = row
+    (tx_id, card, time, cents, probability, decision, model, schema, features, part, off) = row[:11]
+    shadow_probability, shadow_decision, shadow_model = row[11:]
     values = features if isinstance(features, list) else json.loads(str(features))
+    shadow = None
+    if shadow_decision is not None:
+        shadow = ShadowDecision(
+            Score(float(str(shadow_probability))), Decision(str(shadow_decision)), str(shadow_model)
+        )
     record = DecisionRecord(
         vector=FeatureVector(str(schema), tuple(float(v) for v in values)),
         score=Score(float(str(probability))),
         decision=Decision(str(decision)),
         model_version=str(model),
+        shadow=shadow,
     )
     return LedgerRow(
         tx_id=TxId(str(tx_id)),

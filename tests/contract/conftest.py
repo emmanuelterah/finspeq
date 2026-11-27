@@ -87,15 +87,15 @@ class LedgerStore(DecisionLedger, DecisionReader, Protocol):
 
 
 LIVE_POSTGRES_ENV = "FINSPEQ_POSTGRES_DSN"
-SCHEMA_FILE = Path(__file__).parents[2] / "infra" / "postgres" / "init" / "001_schema.sql"
+SCHEMA_DIR = Path(__file__).parents[2] / "infra" / "postgres" / "init"
 
 
 @pytest.fixture(params=["memory", pytest.param("postgres", marks=pytest.mark.integration)])
 def ledger(request: pytest.FixtureRequest) -> LedgerStore:
     """Return an empty ledger of the parametrized adapter.
 
-    The Postgres ledger uses the database in FINSPEQ_POSTGRES_DSN, creates the schema if it is
-    missing, and empties both tables.
+    The Postgres ledger uses the database in FINSPEQ_POSTGRES_DSN, applies every schema script
+    in infra/postgres/init (all idempotent), and empties both tables.
     """
     if request.param == "memory":
         return MemoryLedger()
@@ -104,7 +104,8 @@ def ledger(request: pytest.FixtureRequest) -> LedgerStore:
         pytest.skip(f"{LIVE_POSTGRES_ENV} is not set")
     connection = psycopg.connect(dsn, autocommit=True)
     request.addfinalizer(connection.close)
-    connection.execute(SCHEMA_FILE.read_text(encoding="utf-8"))
+    for script in sorted(SCHEMA_DIR.glob("*.sql")):
+        connection.execute(script.read_text(encoding="utf-8"))
     connection.execute("TRUNCATE decisions, consumer_positions")
     return PostgresLedger(connection, "contract", TEST_TOPIC)
 

@@ -19,7 +19,7 @@ from finspeq.domain.model import (
     TxId,
 )
 from finspeq.domain.policy import Decision, Score
-from finspeq.domain.scored import DecisionRecord
+from finspeq.domain.scored import DecisionRecord, ShadowDecision
 
 SCHEMA_VERSION = 1
 ENVELOPE_FIELDS = frozenset({"schema_version", "key", "transaction", "scored"})
@@ -38,6 +38,8 @@ TRANSACTION_FIELDS = frozenset(
 SCORED_FIELDS = frozenset(
     {"feature_schema", "features", "fraud_probability", "decision", "model_version"}
 )
+SHADOW_FIELD = "shadow"
+SHADOW_FIELDS = frozenset({"fraud_probability", "decision", "model_version"})
 POINT_LENGTH = 2
 
 
@@ -91,14 +93,21 @@ def decode(key: bytes | None, value: bytes | None, position: EventPosition) -> E
 
 
 def _scored_fields(record: DecisionRecord) -> dict[str, object]:
-    """Return the JSON fields of a decision record."""
-    return {
+    """Return the JSON fields of a decision record; "shadow" appears only when there is one."""
+    fields: dict[str, object] = {
         "feature_schema": record.vector.schema,
         "features": list(record.vector.values),
         "fraud_probability": record.score.fraud_probability,
         "decision": record.decision.value,
         "model_version": record.model_version,
     }
+    if record.shadow is not None:
+        fields[SHADOW_FIELD] = {
+            "fraud_probability": record.shadow.score.fraud_probability,
+            "decision": record.shadow.decision.value,
+            "model_version": record.shadow.model_version,
+        }
+    return fields
 
 
 def _object(value: object, fields: frozenset[str], name: str) -> Mapping[str, object]:
@@ -128,13 +137,32 @@ def _transaction(value: object) -> Transaction:
 
 
 def _record(value: object) -> DecisionRecord:
-    """Return the DecisionRecord described by a decoded scored object."""
+    """Return the DecisionRecord described by a decoded scored object.
+
+    The object has exactly SCORED_FIELDS, plus an optional "shadow" object.
+    """
+    if isinstance(value, Mapping) and SHADOW_FIELD in value:
+        shadow_value = value[SHADOW_FIELD]
+        value = {key: item for key, item in value.items() if key != SHADOW_FIELD}
+    else:
+        shadow_value = None
     fields = _object(value, SCORED_FIELDS, "scored")
     values = fields["features"]
     if not isinstance(values, list):
         raise CodecError("features must be a list")
     return DecisionRecord(
         vector=FeatureVector(_string(fields["feature_schema"]), tuple(_number(v) for v in values)),
+        score=Score(_number(fields["fraud_probability"])),
+        decision=Decision(_string(fields["decision"])),
+        model_version=_string(fields["model_version"]),
+        shadow=None if shadow_value is None else _shadow(shadow_value),
+    )
+
+
+def _shadow(value: object) -> ShadowDecision:
+    """Return the ShadowDecision described by a decoded shadow object."""
+    fields = _object(value, SHADOW_FIELDS, "shadow")
+    return ShadowDecision(
         score=Score(_number(fields["fraud_probability"])),
         decision=Decision(_string(fields["decision"])),
         model_version=_string(fields["model_version"]),

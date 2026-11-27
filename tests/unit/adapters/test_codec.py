@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -11,7 +12,7 @@ from finspeq.application.errors import CodecError
 from finspeq.application.messages import EventPosition
 from finspeq.domain.features import FeatureVector
 from finspeq.domain.policy import Decision, Score
-from finspeq.domain.scored import DecisionRecord
+from finspeq.domain.scored import DecisionRecord, ShadowDecision
 from tests.factories import make_tx
 
 POSITION = EventPosition(2, 41)
@@ -34,6 +35,25 @@ def test_scored_round_trip() -> None:
     tx = make_tx(8)
     event = decode(*encode(tx, RECORD), POSITION)
     assert event.record == RECORD
+
+
+def test_shadow_round_trip_and_absence() -> None:
+    """Round-trip a shadow verdict; a record without one has no "shadow" key at all."""
+    shadow = ShadowDecision(Score(0.25), Decision.REVIEW, "shadow-1")
+    record = replace(RECORD, shadow=shadow)
+    tx = make_tx(10)
+    assert decode(*encode(tx, record), POSITION).record == record
+    _, plain = encode(tx, RECORD)
+    assert b"shadow" not in plain
+
+
+def test_unknown_shadow_fields_are_rejected() -> None:
+    """Reject a shadow object with fields other than probability, decision, and version."""
+    _, value = encode(make_tx(11), RECORD)
+    data = json.loads(value)
+    data["scored"]["shadow"] = {"fraud_probability": 0.1}
+    with pytest.raises(CodecError):
+        decode(make_tx(11).card.value.encode(), json.dumps(data).encode(), POSITION)
 
 
 def test_encoding_is_canonical() -> None:

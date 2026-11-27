@@ -18,7 +18,7 @@ from finspeq.adapters.outbound.onnx_runtime import OnnxFraudModel
 from finspeq.adapters.outbound.prometheus import PrometheusMetrics
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.adapters.outbound.redpanda import ConcurrentPublisher, producer_config
-from finspeq.application.score import ScoreTransaction, ScoringDeps
+from finspeq.application.score import ScoreTransaction, ScoringDeps, ShadowScoring
 from finspeq.domain.errors import SchemaMismatchError
 from finspeq.domain.features import FEATURE_SETS, FeatureVector
 from finspeq.domain.policy import DecisionPolicy
@@ -32,11 +32,13 @@ MILLISECONDS_PER_SECOND = 1_000
 def create_app() -> FastAPI:
     """Build the API from FINSPEQ_* environment settings; called once per uvicorn worker.
 
-    Loads the model, refuses to start when its schema has no registered feature set, runs
-    WARMUP_PREDICTIONS predictions, and starts the producer's delivery thread.
+    Loads the model (and the shadow model, which must share its schema), refuses to start
+    when the schema has no registered feature set, runs WARMUP_PREDICTIONS predictions, and
+    starts the producer's delivery thread.
 
     Raises:
-        SchemaMismatchError: The model's schema is not a registered feature set.
+        SchemaMismatchError: The model's schema is not a registered feature set, or the
+            shadow model's schema differs from it.
         KeyError: FINSPEQ_MODEL_DIR is not set.
     """
     settings = serve_cli.from_environment(os.environ)
@@ -44,9 +46,17 @@ def create_app() -> FastAPI:
     feature_set = FEATURE_SETS.get(model.schema)
     if feature_set is None:
         raise SchemaMismatchError(f"no feature set for model schema {model.schema!r}")
+    shadow = None
+    if settings.shadow_model_dir is not None:
+        shadow_model = OnnxFraudModel(str(settings.shadow_model_dir))
+        if shadow_model.schema != model.schema:
+            raise SchemaMismatchError(f"shadow schema {shadow_model.schema} != {model.schema}")
+        shadow = ShadowScoring(shadow_model, DecisionPolicy(shadow_model.thresholds))
     zeros = FeatureVector(feature_set.version, tuple(0.0 for _ in feature_set.names))
     for _ in range(WARMUP_PREDICTIONS):
         model.predict(zeros)
+        if shadow is not None:
+            shadow.model.predict(zeros)
     client = redis.Redis.from_url(
         settings.redis_url, socket_timeout=REDIS_TIMEOUT_S, socket_connect_timeout=REDIS_TIMEOUT_S
     )
@@ -56,7 +66,9 @@ def create_app() -> FastAPI:
     publisher = ConcurrentPublisher(producer, settings.topic, settings.publish_timeout_s)
     publisher.start()
     metrics = PrometheusMetrics()
-    deps = ScoringDeps(store, feature_set, model, DecisionPolicy(model.thresholds), publisher)
+    deps = ScoringDeps(
+        store, feature_set, model, DecisionPolicy(model.thresholds), publisher, shadow
+    )
     appender = store if settings.read_your_writes else None
     scoring = ScoreTransaction(deps, metrics, SystemClock(), appender)
 

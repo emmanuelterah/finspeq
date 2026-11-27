@@ -9,6 +9,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 import psycopg
 import redis
@@ -17,9 +18,10 @@ from confluent_kafka import Consumer, Producer
 from finspeq.adapters.inbound import stream_cli
 from finspeq.adapters.inbound.faults import FaultInjector
 from finspeq.adapters.inbound.feature_worker import FeatureWorker, WorkerLimits, WorkerReport
-from finspeq.adapters.inbound.output import render
+from finspeq.adapters.inbound.output import render, write_json
 from finspeq.adapters.inbound.selection import EventSelection
 from finspeq.adapters.outbound.clock import SystemClock
+from finspeq.adapters.outbound.drift_reference import read_reference
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource
@@ -38,11 +40,13 @@ from finspeq.adapters.outbound.redpanda import (
 )
 from finspeq.application.apply_events import ApplyEvents
 from finspeq.application.disorder import arrival_order
+from finspeq.application.drift import MeasureDrift, daily_columns
 from finspeq.application.errors import StoreUnavailableError
-from finspeq.application.messages import LabeledTransaction
+from finspeq.application.messages import LabeledTransaction, TimeRange
 from finspeq.application.ports import Metrics
 from finspeq.application.record_decisions import RecordDecisions
 from finspeq.application.replay import partitioned_batches
+from finspeq.application.shadow import CompareShadow, ShadowReport
 from finspeq.application.simulate import ReplayHistory, SimulationPlan, SimulationReport
 from finspeq.application.verify import (
     ReplayReport,
@@ -52,12 +56,15 @@ from finspeq.application.verify import (
     VerifyReplay,
 )
 from finspeq.application.verify_ledger import LedgerReport, VerifyLedger
+from finspeq.domain.model import EventTime, TxId
 
 PUBLISH_TIMEOUT_S = 30.0
 POLL_TIMEOUT_S = 0.5
 VERIFY_TOPIC = "verify-replay"
 STATE_BATCH_SIZE = 500
 CRASH_EXIT_CODE = 137
+READER = "reader"  # consumer and topic names of a ledger used only for rows()
+EPOCH_DAY = date(1970, 1, 1)
 READ_TIMEOUT_S = 300.0
 POSTGRES_WAIT_S = 60.0
 POSTGRES_CONNECT_S = 5
@@ -216,6 +223,59 @@ def run_verify_ledger(command: stream_cli.VerifyLedgerCommand) -> LedgerReport:
         connection.close()
 
 
+def run_drift_ledger(command: stream_cli.DriftLedgerCommand) -> dict[str, object]:
+    """Measure each ledger day's PSI against the reference and write the report.
+
+    Days with fewer than command.min_rows rows are skipped. With fail_on_alert, the process
+    exits with status 1 after writing the report if any day has an alert.
+    """
+    reference = read_reference(command.reference)
+    names = [feature.name for feature in reference.features]
+    connection = _postgres(command.dsn)
+    try:
+        ledger = PostgresLedger(connection, READER, READER)
+        days = daily_columns(ledger.rows(), names)
+    finally:
+        connection.close()
+    use_case = MeasureDrift(reference, command.alert_psi)
+    reports = [
+        use_case.from_values(_day_label(day), columns)
+        for day, columns in sorted(days.items())
+        if len(columns[names[0]]) >= command.min_rows
+    ]
+    alerts = sum(1 for report in reports if report.alerts)
+    result: dict[str, object] = {
+        "alert_psi": command.alert_psi,
+        "days": reports,
+        "days_with_alerts": alerts,
+    }
+    write_json(command.output, result)
+    if command.fail_on_alert and alerts:
+        print(render(result))
+        raise SystemExit(1)
+    return result
+
+
+def run_shadow_report(command: stream_cli.ShadowReportCommand) -> ShadowReport:
+    """Compare the ledger's live and shadow decisions, labelled from the event file."""
+    connection = _postgres(command.dsn)
+    try:
+        rows = list(PostgresLedger(connection, READER, READER).rows())
+    finally:
+        connection.close()
+    shadowed = {row.tx_id for row in rows if row.record.shadow is not None}
+    labels: dict[TxId, bool] = {}
+    if shadowed:
+        times = [row.time.epoch_s for row in rows if row.tx_id in shadowed]
+        span = TimeRange(EventTime(min(times)), EventTime(max(times) + 1))
+        for item in ParquetHistoricalSource(command.source).iter_labeled(span):
+            if item.transaction.tx_id in shadowed:
+                labels[item.transaction.tx_id] = item.is_fraud
+    report = CompareShadow().execute(rows, labels)
+    write_json(command.output, report)
+    return report
+
+
 def run_verify_replay(command: stream_cli.VerifyReplayCommand) -> ReplayReport:
     """Replay the selection into Redis and into memory in process, and compare them.
 
@@ -272,6 +332,11 @@ def _postgres(dsn: str) -> psycopg.Connection:
             time.sleep(POSTGRES_RETRY_S)
 
 
+def _day_label(day: int) -> str:
+    """Return the UTC date of day number day (days since 1970-01-01) as YYYY-MM-DD."""
+    return (EPOCH_DAY + timedelta(days=day)).isoformat()
+
+
 def _redis_client(url: str) -> redis.Redis:
     """Return a Redis client for url with binary responses."""
     return redis.Redis.from_url(url)
@@ -309,6 +374,8 @@ def main(argv: Sequence[str]) -> int:
         stream_cli.VerifyStateCommand: run_verify_state,
         stream_cli.LedgerCommand: run_ledger,
         stream_cli.VerifyLedgerCommand: run_verify_ledger,
+        stream_cli.DriftLedgerCommand: run_drift_ledger,
+        stream_cli.ShadowReportCommand: run_shadow_report,
     }
     print(render(handlers[type(command)](command)))
     return 0

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from finspeq.application.errors import PositionGapError
@@ -9,7 +11,7 @@ from finspeq.application.messages import Event, EventBatch, EventPosition
 from finspeq.domain.features import FeatureVector
 from finspeq.domain.model import Transaction
 from finspeq.domain.policy import Decision, Score
-from finspeq.domain.scored import DecisionRecord
+from finspeq.domain.scored import DecisionRecord, ShadowDecision
 from tests.contract.conftest import LedgerStore
 from tests.factories import BASE_TIME, make_tx
 
@@ -78,3 +80,14 @@ def test_positions_are_tracked_per_partition(ledger: LedgerStore) -> None:
     assert ledger.position(0) == EventPosition(0, 4)
     assert ledger.position(1) == EventPosition(1, 9)
     assert ledger.position(2) is None
+
+
+def test_shadow_verdict_round_trips(ledger: LedgerStore) -> None:
+    """Store and return a shadow verdict beside the live decision."""
+    tx = make_tx(1)
+    shadow = ShadowDecision(Score(0.75), Decision.BLOCK, "shadow-1")
+    record = replace(record_for(tx), shadow=shadow)
+    batch = EventBatch(0, (Event(EventPosition(0, 0), tx, record),))
+    ledger.record(batch)
+    (row,) = list(ledger.rows())
+    assert row.record == record
