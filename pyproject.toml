@@ -28,6 +28,7 @@ dev = [
 ]
 data = ["duckdb>=1.0", "pyarrow>=16"]
 bench = ["msgspec>=0.18"]
+evidently = ["evidently>=0.7,<0.8", "pandas>=2.2,<3"]
 training = [
     "lightgbm>=4.3",
     "onnxmltools>=1.12",
@@ -99,6 +100,7 @@ module = [
     "duckdb", "duckdb.*", "pyarrow", "pyarrow.*", "onnxruntime", "onnxruntime.*",
     "onnxmltools", "onnxmltools.*", "sklearn", "sklearn.*", "lightgbm", "lightgbm.*",
     "fakeredis", "fakeredis.*", "prometheus_client", "prometheus_client.*",
+    "pandas", "pandas.*", "evidently", "evidently.*",
 ]
 ignore_missing_imports = true
 
