@@ -1,0 +1,200 @@
+{
+  "runs_total": 11,
+  "exit_codes": {
+    "137": 10,
+    "0": 1
+  },
+  "seconds": 29.2,
+  "max_divergence": 0,
+  "runs_with_divergence": 0,
+  "redis_kill": null,
+  "runs": [
+    {
+      "run": 0,
+      "exit_code": 137,
+      "seconds": 0.594,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        3000,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "run": 1,
+      "exit_code": 137,
+      "seconds": 0.5,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        7800,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "run": 2,
+      "exit_code": 137,
+      "seconds": 1.407,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        800,
+        null,
+        null
+      ]
+    },
+    {
+      "run": 3,
+      "exit_code": 137,
+      "seconds": 0.344,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        1800,
+        null,
+        null
+      ]
+    },
+    {
+      "run": 4,
+      "exit_code": 137,
+      "seconds": 0.437,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        5400,
+        null,
+        null
+      ]
+    },
+    {
+      "run": 5,
+      "exit_code": 137,
+      "seconds": 1.328,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        6,
+        null
+      ]
+    },
+    {
+      "run": 6,
+      "exit_code": 137,
+      "seconds": 0.312,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        406,
+        null
+      ]
+    },
+    {
+      "run": 7,
+      "exit_code": 137,
+      "seconds": 0.39,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        3006,
+        null
+      ]
+    },
+    {
+      "run": 8,
+      "exit_code": 137,
+      "seconds": 0.406,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        5406,
+        null
+      ]
+    },
+    {
+      "run": 9,
+      "exit_code": 137,
+      "seconds": 1.593,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        8529,
+        5877
+      ]
+    },
+    {
+      "run": 10,
+      "exit_code": 0,
+      "seconds": 11.704,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8724,
+        8394,
+        8529,
+        8226
+      ]
+    }
+  ]
+}

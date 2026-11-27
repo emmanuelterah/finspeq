@@ -1,0 +1,126 @@
+{
+  "ledger_rows": 180000,
+  "found_offline": 180000,
+  "all": {
+    "rows": 180000,
+    "vectors_mismatched": 0.1542,
+    "features": {
+      "amount_dollars": {
+        "mismatch": 0.0,
+        "psi_live": 0.06519577345018793,
+        "psi_offline": 0.06519577345018793
+      },
+      "tx_count_1h": {
+        "mismatch": 0.12288333333333333,
+        "psi_live": 0.12686059641997757,
+        "psi_offline": 0.006513504704887939
+      },
+      "tx_count_24h": {
+        "mismatch": 0.1542,
+        "psi_live": 0.09251731273640669,
+        "psi_offline": 0.049965672661149096
+      },
+      "spend_1h": {
+        "mismatch": 0.12288333333333333,
+        "psi_live": 0.1099430082138471,
+        "psi_offline": 0.012744683911968977
+      },
+      "spend_24h": {
+        "mismatch": 0.1542,
+        "psi_live": 0.11980167365464797,
+        "psi_offline": 0.0794523607793158
+      },
+      "amount_to_mean_24h": {
+        "mismatch": 0.15405,
+        "psi_live": 0.043687778677073616,
+        "psi_offline": 0.03000204600698502
+      },
+      "amount_to_max_24h": {
+        "mismatch": 0.06382222222222222,
+        "psi_live": 0.05172904122235167,
+        "psi_offline": 0.037530204753409825
+      },
+      "secs_since_last": {
+        "mismatch": 0.1444111111111111,
+        "psi_live": 0.23874660573207823,
+        "psi_offline": 0.01095965933687924
+      },
+      "distinct_merchants_24h": {
+        "mismatch": 0.14573333333333333,
+        "psi_live": 0.08844354939402746,
+        "psi_offline": 0.046839683218317565
+      },
+      "hour_of_day_utc": {
+        "mismatch": 0.0,
+        "psi_live": 2.9973332537746957,
+        "psi_offline": 2.9973332537746957
+      },
+      "home_merchant_km": {
+        "mismatch": 0.0,
+        "psi_live": 2.9393498519007143e-05,
+        "psi_offline": 2.9393498519007143e-05
+      }
+    }
+  },
+  "steady": {
+    "rows": 175667,
+    "vectors_mismatched": 0.1534778871387341,
+    "features": {
+      "amount_dollars": {
+        "mismatch": 0.0,
+        "psi_live": 0.06530902603570596,
+        "psi_offline": 0.06530902603570596
+      },
+      "tx_count_1h": {
+        "mismatch": 0.12277775563993237,
+        "psi_live": 0.1227130294137671,
+        "psi_offline": 0.005932513084441701
+      },
+      "tx_count_24h": {
+        "mismatch": 0.1534778871387341,
+        "psi_live": 0.08642089412257696,
+        "psi_offline": 0.04595206477374857
+      },
+      "spend_1h": {
+        "mismatch": 0.12277775563993237,
+        "psi_live": 0.10710107955645592,
+        "psi_offline": 0.01205638598539999
+      },
+      "spend_24h": {
+        "mismatch": 0.1534778871387341,
+        "psi_live": 0.11439638170136295,
+        "psi_offline": 0.07550634049988438
+      },
+      "amount_to_mean_24h": {
+        "mismatch": 0.15332418724063143,
+        "psi_live": 0.04239245395150278,
+        "psi_offline": 0.029451838088661808
+      },
+      "amount_to_max_24h": {
+        "mismatch": 0.06331297284065875,
+        "psi_live": 0.05019214039880511,
+        "psi_offline": 0.03680472578909833
+      },
+      "secs_since_last": {
+        "mismatch": 0.14364678624898244,
+        "psi_live": 0.23396694751114966,
+        "psi_offline": 0.00973194598008355
+      },
+      "distinct_merchants_24h": {
+        "mismatch": 0.1449333113219899,
+        "psi_live": 0.08235175468907902,
+        "psi_offline": 0.04282387495978588
+      },
+      "hour_of_day_utc": {
+        "mismatch": 0.0,
+        "psi_live": 2.999781401973671,
+        "psi_offline": 2.999781401973671
+      },
+      "home_merchant_km": {
+        "mismatch": 0.0,
+        "psi_live": 3.0451469301917755e-05,
+        "psi_offline": 3.0451469301917755e-05
+      }
+    }
+  }
+}

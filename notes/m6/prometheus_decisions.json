@@ -1,0 +1,1 @@
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"decision":"BLOCK"},"value":[1795770227.304,"527.2885436069697"]},{"metric":{"decision":"APPROVE"},"value":[1795770227.304,"78539.67917376521"]},{"metric":{"decision":"REVIEW"},"value":[1795770227.304,"568.7834193994568"]}]}}

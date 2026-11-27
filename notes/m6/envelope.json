@@ -1,0 +1,16 @@
+{
+  "messages": 20000,
+  "bytes_per_message": {
+    "json": 486.72165,
+    "msgpack": 455.9623
+  },
+  "us_per_message": {
+    "codec_encode": 13.66685000000416,
+    "codec_decode": 37.63501500000075,
+    "stdlib_json_loads": 15.320569999994404,
+    "msgspec_json_encode": 2.168325000002369,
+    "msgspec_json_decode": 3.8486550000015995,
+    "msgspec_msgpack_encode": 1.0284749999982523,
+    "msgspec_msgpack_decode": 3.813534999994772
+  }
+}

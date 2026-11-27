@@ -1,0 +1,7 @@
+{
+  "mode": "transactional",
+  "batches": 170,
+  "events": 33873,
+  "seconds": 4.907,
+  "events_per_second": 6902.995720399214
+}

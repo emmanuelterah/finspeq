@@ -1,0 +1,148 @@
+{
+  "model_version": "2e632818a205",
+  "review_threshold": 0.04118362624889366,
+  "delay": {
+    "min_days": 7.0,
+    "mode_days": 21.0,
+    "max_days": 60.0,
+    "seed": 0
+  },
+  "window_days": 30,
+  "points": [
+    {
+      "as_of": 1774915200,
+      "window_start": 1772323200,
+      "frauds": 5524,
+      "labelled": 857,
+      "coverage": 0.1551412020275163,
+      "observed_recall": 0.94049008168028,
+      "true_recall": 0.943157132512672
+    },
+    {
+      "as_of": 1775520000,
+      "window_start": 1772928000,
+      "frauds": 5608,
+      "labelled": 926,
+      "coverage": 0.1651212553495007,
+      "observed_recall": 0.9416846652267818,
+      "true_recall": 0.9381241084165478
+    },
+    {
+      "as_of": 1776124800,
+      "window_start": 1773532800,
+      "frauds": 5512,
+      "labelled": 887,
+      "coverage": 0.16092162554426706,
+      "observed_recall": 0.9346110484780158,
+      "true_recall": 0.9355950653120464
+    },
+    {
+      "as_of": 1776729600,
+      "window_start": 1774137600,
+      "frauds": 5569,
+      "labelled": 880,
+      "coverage": 0.1580175974142575,
+      "observed_recall": 0.9443181818181818,
+      "true_recall": 0.9358951337762614
+    },
+    {
+      "as_of": 1777334400,
+      "window_start": 1774742400,
+      "frauds": 5452,
+      "labelled": 856,
+      "coverage": 0.15700660308143802,
+      "observed_recall": 0.9299065420560748,
+      "true_recall": 0.9312179016874541
+    },
+    {
+      "as_of": 1777939200,
+      "window_start": 1775347200,
+      "frauds": 5313,
+      "labelled": 934,
+      "coverage": 0.17579521927348013,
+      "observed_recall": 0.917558886509636,
+      "true_recall": 0.9322416713721061
+    },
+    {
+      "as_of": 1778544000,
+      "window_start": 1775952000,
+      "frauds": 5536,
+      "labelled": 939,
+      "coverage": 0.16961705202312138,
+      "observed_recall": 0.9350372736954207,
+      "true_recall": 0.9367774566473989
+    },
+    {
+      "as_of": 1779148800,
+      "window_start": 1776556800,
+      "frauds": 5376,
+      "labelled": 845,
+      "coverage": 0.15718005952380953,
+      "observed_recall": 0.9301775147928995,
+      "true_recall": 0.9378720238095238
+    },
+    {
+      "as_of": 1779753600,
+      "window_start": 1777161600,
+      "frauds": 5314,
+      "labelled": 836,
+      "coverage": 0.1573202860368837,
+      "observed_recall": 0.9270334928229665,
+      "true_recall": 0.9394053443733534
+    },
+    {
+      "as_of": 1780358400,
+      "window_start": 1777766400,
+      "frauds": 5570,
+      "labelled": 950,
+      "coverage": 0.17055655296229802,
+      "observed_recall": 0.9378947368421052,
+      "true_recall": 0.9427289048473968
+    },
+    {
+      "as_of": 1780963200,
+      "window_start": 1778371200,
+      "frauds": 5196,
+      "labelled": 995,
+      "coverage": 0.19149345650500385,
+      "observed_recall": 0.9437185929648241,
+      "true_recall": 0.9387990762124712
+    },
+    {
+      "as_of": 1781568000,
+      "window_start": 1778976000,
+      "frauds": 3768,
+      "labelled": 834,
+      "coverage": 0.2213375796178344,
+      "observed_recall": 0.9544364508393285,
+      "true_recall": 0.9365711252653928
+    },
+    {
+      "as_of": 1782172800,
+      "window_start": 1779580800,
+      "frauds": 2683,
+      "labelled": 860,
+      "coverage": 0.32053671263510997,
+      "observed_recall": 0.95,
+      "true_recall": 0.935892657472978
+    },
+    {
+      "as_of": 1782777600,
+      "window_start": 1780185600,
+      "frauds": 1314,
+      "labelled": 564,
+      "coverage": 0.4292237442922374,
+      "observed_recall": 0.9326241134751773,
+      "true_recall": 0.9322678843226788
+    },
+    {
+      "as_of": 1783382400,
+      "window_start": 1780790400,
+      "frauds": 212,
+      "labelled": 114,
+      "coverage": 0.5377358490566038,
+      "observed_recall": 0.9122807017543859,
+      "true_recall": 0.9056603773584906
+    }
+  ]
+}

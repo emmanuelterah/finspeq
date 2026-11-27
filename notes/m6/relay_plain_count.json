@@ -1,0 +1,18 @@
+[
+  {
+    "isolation": "read_committed",
+    "records": 35873,
+    "inputs": 33873,
+    "missing": 0,
+    "duplicated": 2000,
+    "extra_copies": 2000
+  },
+  {
+    "isolation": "read_uncommitted",
+    "records": 35873,
+    "inputs": 33873,
+    "missing": 0,
+    "duplicated": 2000,
+    "extra_copies": 2000
+  }
+]

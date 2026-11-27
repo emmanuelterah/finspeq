@@ -1,0 +1,30 @@
+{
+  "rows": 90000,
+  "frauds": 773,
+  "agreement": {
+    "APPROVE->APPROVE": 88602,
+    "APPROVE->BLOCK": 1,
+    "APPROVE->REVIEW": 125,
+    "BLOCK->BLOCK": 563,
+    "BLOCK->REVIEW": 35,
+    "REVIEW->APPROVE": 127,
+    "REVIEW->BLOCK": 28,
+    "REVIEW->REVIEW": 519
+  },
+  "live": {
+    "model_version": "2e632818a205",
+    "flag_recall": 0.8939197930142303,
+    "flag_fpr": 0.006511481950530669,
+    "block_recall": 0.7011642949547219,
+    "block_fpr": 0.0006276127181234379
+  },
+  "shadow": {
+    "model_version": "b99362397317",
+    "flag_recall": 0.88745148771022,
+    "flag_fpr": 0.0065563114303966285,
+    "block_recall": 0.6959896507115135,
+    "block_fpr": 0.000605197978190458
+  },
+  "frauds_only_shadow_flags": 9,
+  "frauds_only_live_flags": 14
+}
