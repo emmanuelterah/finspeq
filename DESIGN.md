@@ -6,7 +6,7 @@ Real-time fraud scoring pipeline, built as a deep learning exercise in streaming
 - **Companion docs:** [ARCHITECTURE.md](ARCHITECTURE.md) (hexagonal design, SOLID, ACID) and
   [CODING_STANDARDS.md](CODING_STANDARDS.md) (100-char lines, docstring rules, enforcement)
 - **Stack:** Python 3.11+, Redpanda, Redis, Postgres, LightGBM → ONNX Runtime, FastAPI, Docker Compose
-- **Hardware budget:** one laptop (i7, 32 GB RAM), $0
+- **Hardware budget:** one machine (Intel Core i7, 32 GB RAM), $0
 
 ---
 

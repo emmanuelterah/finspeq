@@ -17,10 +17,10 @@ These are the quality attributes, ranked. When two of them conflict, the higher-
 | 1 | Determinism | The same ordered event log gives identical feature state, vectors, and decisions |
 | 2 | Correctness under failure | A crash, duplicate, redelivery, or rebalance never corrupts state |
 | 3 | Testability | Every port has a contract test suite; the core is testable without containers |
-| 4 | Latency | Scoring p99 under 50 ms at 500 req/s on the laptop |
+| 4 | Latency | Scoring p99 under 50 ms at 500 req/s on one machine (Intel Core i7, 32 GB RAM) |
 | 5 | Changeability | A new feature, store, or model is a new class plus wiring; the core is untouched |
 
-**Constraints:** Python 3.11+, one laptop, Docker Compose, $0.
+**Constraints:** Python 3.11+, one machine (Intel Core i7, 32 GB RAM), Docker Compose, $0.
 
 ---
 
@@ -393,7 +393,8 @@ rejected and an alarm is raised.
   offsets exist only so that lag can be measured.
 - Full rebuild: `FLUSHALL`, then replay from offset 0. This requires unlimited topic retention
   (a few GB on disk).
-- **Laptop limitation (accepted):** one broker with RF=1 means losing the disk loses the log.
+- **Single-machine limitation (accepted):** one broker with RF=1 means losing the disk loses the
+  log.
 - **Broker acknowledgement means fsync:** the topic is created with `write.caching=false`.
   Redpanda's default (`true`) acknowledges `acks=all` writes before they reach disk, which would
   let a broker crash lose acknowledged events. M2 measures the latency cost of both settings.
@@ -457,7 +458,7 @@ This settles open question 4 in DESIGN.md: **publish before responding.**
 
 ## 7. Hot-path latency budget (p99 target 50 ms)
 
-Budgets were planned before M5; the measured column is M5 at 100 requests/s on one laptop
+Budgets were planned before M5; the measured column is M5 at 100 requests/s on one machine
 (`notes/m5.md`), p50 / p99.
 
 | Step | Budget | Measured |
@@ -470,7 +471,7 @@ Budgets were planned before M5; the measured column is M5 at 100 requests/s on o
 | Headroom for queueing, GC, scheduling | 37 ms | end to end 7.4 / 39 ms |
 
 The sync route in the thread pool was kept; one process saturates at about 310–370 requests/s
-on the laptop.
+on the machine.
 
 ---
 

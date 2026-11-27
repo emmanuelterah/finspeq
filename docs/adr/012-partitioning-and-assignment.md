@@ -32,5 +32,5 @@ strategy to use, and whether rebalances or stalled members (zombies) can corrupt
   paused only moving partitions, but for about 2 s. Both gave 0 mismatches.
 - A worker stalled past `max.poll.interval.ms` applied a 200-event batch that its peer had
   already applied: all 200 were skipped and verify-state found 0 mismatches.
-- Throughput rises with partitions and workers (24,063 events/s with 8 and 8 on the laptop),
+- Throughput rises with partitions and workers (24,063 events/s with 8 and 8 on the machine),
   but the end-to-end limit there is the durable producer at about 6,000 events/s.

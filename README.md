@@ -17,7 +17,8 @@ measurements, not to assert it.
 
 ## The results
 
-Every number below comes from a run on one laptop. The raw reports are in [`notes/`](notes/).
+Every number below comes from runs on one machine: Intel Core i7, 32 GB RAM, Windows, with Redpanda,
+Redis and Postgres in Docker Desktop. The raw reports are in [`notes/`](notes/).
 
 | What was tested | Result |
 |---|---|
@@ -27,7 +28,7 @@ Every number below comes from a run on one laptop. The raw reports are in [`note
 | 108 hard crashes of the feature worker (`kill -9` style) | **0** differences; the naive approach over-counted **4.93%** ($353k) |
 | Redis killed mid-run, then a full rebuild from offset 0 | **0** differences; rebuild at **9,845** events/s |
 | Events delayed by up to 24 h, plus 1% duplicates, with 109 crashes | **0** differences against a replay of the same arrival order |
-| 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | **0** differences; up to **24,063** events/s on a laptop |
+| 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | **0** differences; up to **24,063** events/s on one machine |
 | Publishing without a key | Final state still matches, but **67%** of features are wrong when scored |
 | Scoring API at 100 requests/s, decision logged before answering | p50 **7.4 ms**, p99 **39 ms** |
 | Decision ledger through 42 crashes and a Postgres SIGKILL | **124,146** rows, **0** missing, **0** duplicates |

@@ -25,8 +25,9 @@ to streaming systems. Each section opens with a plain-language summary, then goe
 ## 1. In one page
 
 Finspeq scores card payments for fraud as they stream in, and it is built so that replaying the
-same stream always gives the same answer, byte for byte. All seven milestones (M0 to M6) are done, and
-every guarantee below was measured on one laptop.
+same stream always gives the same answer, byte for byte. All seven milestones (M0 to M6) are
+done, and every guarantee below was measured on one machine (Intel Core i7, 32 GB RAM, Windows,
+with Redpanda, Redis and Postgres in Docker Desktop).
 
 > **In plain terms.** Imagine a bank's fraud checker that keeps a running notebook for each card:
 > what it bought in the last 24 hours, where, and for how much. Every new payment is judged
@@ -511,7 +512,7 @@ see; the store now counts out-of-order events on every write, so it is visible.
 
 A backlog of 609,216 events drained at 6,958 events/s with one worker and 24,063 events/s with
 eight workers on eight partitions; every multi-worker run matched a replay. Scaling was not
-linear: between two and four workers it flattened at 11,000 to 12,000 events/s. The laptop
+linear: between two and four workers it flattened at 11,000 to 12,000 events/s. The machine
 itself is the bottleneck. Redis spends only about 8 ms per 500-event script call and held
 7.4 MB, but the workers, Redpanda, Redis and Docker's port forwarding share the same CPUs.
 Four threads in one process did as well as four processes, so Python's GIL is not the limit.
@@ -533,7 +534,7 @@ zombie's late write fails the same position check
 
 With four workers consuming, the simulator published at 4,995 events/s and, asked for 10,000,
 reached 6,098 events/s; lag never exceeded 2,575 events (about half a second). The end-to-end
-limit on this laptop is the producer waiting for durable acknowledgements, about 6,000
+limit on this machine is the producer waiting for durable acknowledgements, about 6,000
 events/s, with two to four times that in consumer headroom. Full results:
 [notes/m4.md](../notes/m4.md).
 
@@ -566,7 +567,7 @@ confirm, and only then answers. A wrong field answers 422; a Redis or broker fai
 The broker acknowledgement is the largest step. With one message per request there is nothing to
 batch, so the producer's linger only adds waiting: linger 0 halved the publish time (4.5 ms
 p50 at 250/s), and it is now the default. One API process saturates at about 310 to 370
-requests a second on the laptop, which also runs the load generator and Docker, so the 500/s
+requests a second on the machine, which also runs the load generator and Docker, so the 500/s
 target was not reached there. The first load test was itself the bottleneck: the httpx client
 managed 160 requests a second where aiohttp managed 934 against the same app.
 
@@ -689,7 +690,7 @@ verdict is dropped. On 90,000 requests with 773 frauds:
 | Same decision | 99.65% of requests | |
 
 The candidate is not better, so the live model stays. The shadow costs one more prediction,
-1.7 ms per request at the median. End-to-end latency in these runs is not a result: the laptop
+1.7 ms per request at the median. End-to-end latency in these runs is not a result: the machine
 was saturated at 200 requests a second even without the shadow, with Prometheus, Grafana, the
 worker and the load generator sharing it.
 
