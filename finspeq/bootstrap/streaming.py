@@ -1,4 +1,4 @@
-"""Composition root of the streaming processes: simulator, feature worker, verification."""
+"""Composition root of the streaming processes: simulator, workers, and verification."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 
+import psycopg
 import redis
 from confluent_kafka import Consumer, Producer
 
@@ -22,6 +23,7 @@ from finspeq.adapters.outbound.clock import SystemClock
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.null_metrics import NullMetrics
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource
+from finspeq.adapters.outbound.postgres_ledger import PostgresLedger
 from finspeq.adapters.outbound.prometheus import PrometheusMetrics
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 from finspeq.adapters.outbound.redpanda import (
@@ -32,11 +34,14 @@ from finspeq.adapters.outbound.redpanda import (
     SourceOptions,
     consumer_config,
     producer_config,
+    read_topic,
 )
 from finspeq.application.apply_events import ApplyEvents
 from finspeq.application.disorder import arrival_order
+from finspeq.application.errors import StoreUnavailableError
 from finspeq.application.messages import LabeledTransaction
 from finspeq.application.ports import Metrics
+from finspeq.application.record_decisions import RecordDecisions
 from finspeq.application.replay import partitioned_batches
 from finspeq.application.simulate import ReplayHistory, SimulationPlan, SimulationReport
 from finspeq.application.verify import (
@@ -46,12 +51,17 @@ from finspeq.application.verify import (
     VerifyFinalState,
     VerifyReplay,
 )
+from finspeq.application.verify_ledger import LedgerReport, VerifyLedger
 
 PUBLISH_TIMEOUT_S = 30.0
 POLL_TIMEOUT_S = 0.5
 VERIFY_TOPIC = "verify-replay"
 STATE_BATCH_SIZE = 500
 CRASH_EXIT_CODE = 137
+READ_TIMEOUT_S = 300.0
+POSTGRES_WAIT_S = 60.0
+POSTGRES_CONNECT_S = 5
+POSTGRES_RETRY_S = 1.0
 
 
 def run_simulate(command: stream_cli.SimulateCommand) -> SimulationReport:
@@ -160,6 +170,52 @@ def _run_consumer(
     runs[index] = ConsumerRun(report, tuple(source.rebalances))
 
 
+def run_ledger(command: stream_cli.LedgerCommand) -> WorkerReport:
+    """Record the topic's scored events in Postgres until a stop condition; return totals."""
+    connection = _postgres(command.dsn)
+    ledger = PostgresLedger(connection, command.consumer, command.topic)
+    config = consumer_config(command.bootstrap, command.group)
+    source = RedpandaSource(
+        Consumer(config), command.topic, ledger.position, SourceOptions(POLL_TIMEOUT_S)
+    )
+    source.start()
+    clock = SystemClock()
+    limits = WorkerLimits(command.batch_size, command.idle_exit_s, command.start_timeout_s)
+    faults = FaultInjector(command.faults, _hard_exit, time.sleep)
+    worker = FeatureWorker(
+        source, RecordDecisions(ledger, NullMetrics(), clock), clock, limits, faults
+    )
+    stop = threading.Event()
+    _stop_on_signals(stop)
+    try:
+        return worker.run(stop)
+    finally:
+        source.close()
+        connection.close()
+
+
+def run_verify_ledger(command: stream_cli.VerifyLedgerCommand) -> LedgerReport:
+    """Read the whole topic and compare its scored events with the Postgres ledger."""
+    consumer = Consumer(
+        {
+            "bootstrap.servers": command.bootstrap,
+            "group.id": f"verify-ledger-{os.getpid()}",
+            "broker.address.family": "v4",
+            "enable.auto.commit": False,
+        }
+    )
+    try:
+        events = read_topic(consumer, command.topic, command.partitions, READ_TIMEOUT_S)
+    finally:
+        consumer.close()
+    connection = _postgres(command.dsn)
+    try:
+        ledger = PostgresLedger(connection, command.consumer, command.topic)
+        return VerifyLedger(ledger, ledger).execute(events)
+    finally:
+        connection.close()
+
+
 def run_verify_replay(command: stream_cli.VerifyReplayCommand) -> ReplayReport:
     """Replay the selection into Redis and into memory in process, and compare them.
 
@@ -200,6 +256,22 @@ def _selected_items(selection: EventSelection) -> Iterator[LabeledTransaction]:
             yield item
 
 
+def _postgres(dsn: str) -> psycopg.Connection:
+    """Return an autocommit connection to dsn, retrying for up to POSTGRES_WAIT_S seconds.
+
+    Raises:
+        StoreUnavailableError: Postgres did not accept a connection in time.
+    """
+    deadline = time.monotonic() + POSTGRES_WAIT_S
+    while True:
+        try:
+            return psycopg.connect(dsn, autocommit=True, connect_timeout=POSTGRES_CONNECT_S)
+        except psycopg.OperationalError as exc:
+            if time.monotonic() > deadline:
+                raise StoreUnavailableError(f"Postgres unavailable: {exc}") from exc
+            time.sleep(POSTGRES_RETRY_S)
+
+
 def _redis_client(url: str) -> redis.Redis:
     """Return a Redis client for url with binary responses."""
     return redis.Redis.from_url(url)
@@ -235,6 +307,8 @@ def main(argv: Sequence[str]) -> int:
         stream_cli.WorkerCommand: run_worker,
         stream_cli.VerifyReplayCommand: run_verify_replay,
         stream_cli.VerifyStateCommand: run_verify_state,
+        stream_cli.LedgerCommand: run_ledger,
+        stream_cli.VerifyLedgerCommand: run_verify_ledger,
     }
     print(render(handlers[type(command)](command)))
     return 0

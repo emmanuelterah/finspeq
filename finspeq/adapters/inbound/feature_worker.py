@@ -1,14 +1,14 @@
-"""Feature worker: the consumer loop that applies log events to the window store."""
+"""The consumer loop shared by the feature worker and the ledger worker."""
 
 from __future__ import annotations
 
 import math
 import threading
 from dataclasses import dataclass
+from typing import Protocol
 
 from finspeq.adapters.inbound.faults import NO_FAULTS, CrashPoint, FaultInjector
-from finspeq.application.apply_events import ApplyEvents
-from finspeq.application.messages import ApplyResult
+from finspeq.application.messages import ApplyResult, EventBatch
 from finspeq.application.ports import Clock, EventSource
 
 MILLISECONDS_PER_SECOND = 1_000.0
@@ -71,13 +71,21 @@ class WorkerReport:
         return self.events / self.busy_s if self.busy_s > 0 else 0.0
 
 
+class BatchHandler(Protocol):
+    """A use case that stores one batch, such as ApplyEvents or RecordDecisions."""
+
+    def execute(self, batch: EventBatch) -> ApplyResult:
+        """Store batch and return the store's result."""
+        ...
+
+
 class FeatureWorker:
-    """Polls batches from an event source and applies them with ApplyEvents."""
+    """Polls batches from an event source and hands each to a batch handler."""
 
     def __init__(
         self,
         source: EventSource,
-        use_case: ApplyEvents,
+        use_case: BatchHandler,
         clock: Clock,
         limits: WorkerLimits,
         faults: FaultInjector | None = None,
@@ -86,7 +94,8 @@ class FeatureWorker:
 
         Args:
             source: Event source, already started.
-            use_case: Applies each batch.
+            use_case: Stores each batch (ApplyEvents for windows, RecordDecisions for the
+                ledger).
             clock: Measures idle time and the time spent polling and applying.
             limits: Batch size and waiting limits.
             faults: Crash and stall injector called after each poll, apply, and

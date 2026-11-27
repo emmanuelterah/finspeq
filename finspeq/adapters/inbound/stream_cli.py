@@ -86,7 +86,42 @@ class VerifyStateCommand:
     lateness_s: int
 
 
-StreamCommand = SimulateCommand | WorkerCommand | VerifyReplayCommand | VerifyStateCommand
+@dataclass(frozen=True, slots=True)
+class LedgerCommand:
+    """Arguments of `ledger`: the worker that records scored events in Postgres."""
+
+    bootstrap: str
+    topic: str
+    group: str
+    dsn: str
+    consumer: str
+    batch_size: int
+    idle_exit_s: float | None
+    start_timeout_s: float | None
+    faults: FaultPlan
+
+
+@dataclass(frozen=True, slots=True)
+class VerifyLedgerCommand:
+    """Arguments of `verify-ledger`: compare the ledger with the topic's scored events."""
+
+    bootstrap: str
+    topic: str
+    partitions: int
+    dsn: str
+    consumer: str
+
+
+StreamCommand = (
+    SimulateCommand
+    | WorkerCommand
+    | VerifyReplayCommand
+    | VerifyStateCommand
+    | LedgerCommand
+    | VerifyLedgerCommand
+)
+DEFAULT_DSN = "postgresql://finspeq:finspeq@127.0.0.1:15432/finspeq"
+DEFAULT_LEDGER_CONSUMER = "ledger"
 
 
 def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -146,10 +181,32 @@ def add_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) 
     state.add_argument("--lateness-s", type=int, default=DEFAULT_LATENESS_S, help=LATENESS_HELP)
 
 
+def add_ledger_commands(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ledger and verify-ledger sub-commands."""
+    ledger = commands.add_parser("ledger", help="record scored events in Postgres")
+    _add_broker(ledger)
+    ledger.add_argument("--group", default="finspeq-ledger")
+    ledger.add_argument("--dsn", default=DEFAULT_DSN)
+    ledger.add_argument("--consumer", default=DEFAULT_LEDGER_CONSUMER)
+    ledger.add_argument("--batch-size", type=int, default=500)
+    ledger.add_argument("--idle-exit-s", type=float)
+    ledger.add_argument("--start-timeout-s", type=float, default=60.0)
+    ledger.add_argument("--crash-point", choices=[p.value for p in CrashPoint])
+    ledger.add_argument("--crash-probability", type=float, default=0.0)
+    ledger.add_argument("--crash-seed", type=int, default=0)
+    verify = commands.add_parser("verify-ledger", help="compare the ledger with the topic")
+    _add_broker(verify)
+    verify.add_argument("--partitions", type=int, default=1)
+    verify.add_argument("--dsn", default=DEFAULT_DSN)
+    verify.add_argument("--consumer", default=DEFAULT_LEDGER_CONSUMER)
+
+
 def parse(argv: Sequence[str]) -> StreamCommand:
     """Return the streaming command described by argv; exit with status 2 on invalid arguments."""
     parser = argparse.ArgumentParser(prog="finspeq-stream")
-    add_commands(parser.add_subparsers(dest="command", required=True))
+    commands = parser.add_subparsers(dest="command", required=True)
+    add_commands(commands)
+    add_ledger_commands(commands)
     command = _command_from(parser.parse_args(list(argv)))
     if command is None:
         parser.error(f"unknown command {argv[0] if argv else ''}")
@@ -212,6 +269,32 @@ def _command_from(args: argparse.Namespace) -> StreamCommand | None:
             args.topic,
             args.partitions,
             args.lateness_s,
+        )
+    return _ledger_command_from(args)
+
+
+def _ledger_command_from(args: argparse.Namespace) -> StreamCommand | None:
+    """Return the ledger or verify-ledger command described by args, or None."""
+    if args.command == "ledger":
+        plan = FaultPlan(
+            None if args.crash_point is None else CrashPoint(args.crash_point),
+            args.crash_probability,
+            args.crash_seed,
+        )
+        return LedgerCommand(
+            args.bootstrap,
+            args.topic,
+            args.group,
+            args.dsn,
+            args.consumer,
+            args.batch_size,
+            args.idle_exit_s,
+            args.start_timeout_s,
+            plan,
+        )
+    if args.command == "verify-ledger":
+        return VerifyLedgerCommand(
+            args.bootstrap, args.topic, args.partitions, args.dsn, args.consumer
         )
     return None
 
