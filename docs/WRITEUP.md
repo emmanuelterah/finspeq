@@ -14,16 +14,17 @@ to streaming systems. Each section opens with a plain-language summary, then goe
 7. [M2: crashes and "effectively once"](#7-m2-crashes-and-effectively-once)
 8. [M3: late events and choosing allowed lateness](#8-m3-late-events-and-choosing-allowed-lateness)
 9. [M4: several workers, rebalances and the key](#9-m4-several-workers-rebalances-and-the-key)
-10. [Engineering standards](#10-engineering-standards)
-11. [What comes next, and what we learned](#11-what-comes-next-and-what-we-learned)
-12. [Glossary](#12-glossary)
+10. [M5: scoring live, the ledger and the race](#10-m5-scoring-live-the-ledger-and-the-race)
+11. [Engineering standards](#11-engineering-standards)
+12. [What comes next, and what we learned](#12-what-comes-next-and-what-we-learned)
+13. [Glossary](#13-glossary)
 
 ---
 
 ## 1. In one page
 
 Finspeq scores card payments for fraud as they stream in, and it is built so that replaying the
-same stream always gives the same answer, byte for byte. Five milestones (M0 to M4) are done, and
+same stream always gives the same answer, byte for byte. Six milestones (M0 to M5) are done, and
 every guarantee below was measured on one laptop.
 
 > **In plain terms.** Imagine a bank's fraud checker that keeps a running notebook for each card:
@@ -44,6 +45,8 @@ falls behind, or is split across more consumers.
 | Redis killed mid-run, then a full rebuild from the start of the log | 0 differences; rebuild at 9,845 events/s |
 | Events delayed up to 24 h plus 1% duplicates, with 109 crashes | 0 differences against a replay of the same arrival order |
 | 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | 0 differences; up to 24,063 events/s |
+| Scoring API at 100 requests/s, decision logged before answering | p50 7.4 ms, p99 39 ms |
+| Decision ledger through 42 crashes and a Postgres SIGKILL | 124,146 rows, 0 missing, 0 duplicates |
 
 **What it is built from.** Python 3.11, Redpanda (a Kafka-compatible event log), Redis, Postgres,
 LightGBM exported to ONNX, and Docker Compose. There is no stream-processing framework: the
@@ -176,12 +179,14 @@ flowchart LR
     R[["Redpanda log<br/>source of truth<br/>key = card number"]]
     R --> W["Feature worker<br/>one Lua call:<br/>events + position"]
     W --> X[("Redis<br/>24 h + 1 h window<br/>per card")]
-    X -.->|"reads the card window"| API["Scoring API (M5)<br/>features + score<br/>reply after ack"]
-    M["ONNX model"] -.-> API
-    API -.->|"publishes decision"| R
+    X -->|"reads the card window"| API["Scoring API<br/>features + score<br/>reply after ack"]
+    M["ONNX model"] --> API
+    API -->|"publishes decision"| R
+    R --> L["Ledger worker"]
+    L --> P[("Postgres<br/>decision ledger")]
 ```
 
-Solid lines are built (M0 to M4); dashed lines are planned for M5.
+Every box is built. The API's only write is to the log; Redis and Postgres are derived from it.
 
 1. A **simulator** replays history into the log in canonical order. It can delay and duplicate
    events on purpose, with a seed so the same disorder can be produced again.
@@ -191,9 +196,9 @@ Solid lines are built (M0 to M4); dashed lines are planned for M5.
 3. The **feature worker** reads batches, writes them to Redis in one atomic step together with its
    read position, and records metrics.
 4. **Redis** holds each card's last 24 hours plus one hour of allowed lateness.
-5. Planned for M5: a **scoring API** reads a card's window, computes features, calls the ONNX
-   model, and publishes the payment and decision to the log before answering. A ledger worker
-   will copy decisions into **Postgres**.
+5. The **scoring API** reads a card's window, computes features, calls the ONNX model, and
+   publishes the payment and decision to the log before answering. A ledger worker copies
+   decisions into **Postgres**.
 
 Why publish to the log before answering, instead of writing to Redis, Postgres and the log
 separately? Three separate writes can half-succeed and disagree. One write to the log is atomic by
@@ -528,7 +533,74 @@ limit on this laptop is the producer waiting for durable acknowledgements, about
 events/s, with two to four times that in consumer headroom. Full results:
 [notes/m4.md](../notes/m4.md).
 
-## 10. Engineering standards
+## 10. M5: scoring live, the ledger and the race
+
+A payment is scored and its decision logged in 7.4 ms (p50) and 39 ms (p99) at 100 requests a
+second; the decision ledger stayed exact through 42 crashes and a database kill.
+
+> **In plain terms.** This is where the system starts answering real questions: "is this
+> payment fraud?" The answer is only given after it has been written to the permanent record,
+> so nothing is ever decided off the books. We also checked what happens when two payments
+> from the same card arrive so close together that the second one can't yet see the first.
+
+### The hot path
+
+`POST /score` reads the card's 24 h window from Redis, computes the 11 features, runs the ONNX
+model, applies the thresholds, publishes the payment with its decision, waits for the broker to
+confirm, and only then answers. A wrong field answers 422; a Redis or broker failure answers
+503, and no decision leaves without a log entry. Each response carries its step timings in a
+`Server-Timing` header.
+
+| Step (100/s) | Budget | p50 | p99 |
+|---|---|---|---|
+| Redis window read | 2 ms | 1.5 ms | 4.9 ms |
+| Features | 1 ms | 0.06 ms | 0.14 ms |
+| ONNX predict | 3 ms | 0.44 ms | 1.2 ms |
+| Publish and broker ack (linger 1 ms) | 5 ms | 11.3 ms | 19.1 ms |
+| End to end | 50 ms (p99) | 7.4 ms | 39 ms |
+
+The broker acknowledgement is the largest step. With one message per request there is nothing to
+batch, so the producer's linger only adds waiting: linger 0 halved the publish time (4.5 ms
+p50 at 250/s), and it is now the default. One API process saturates at about 310 to 370
+requests a second on the laptop, which also runs the load generator and Docker, so the 500/s
+target was not reached there. The first load test was itself the bottleneck: the httpx client
+managed 160 requests a second where aiohttp managed 934 against the same app.
+
+### The decision ledger
+
+A ledger worker copies every logged decision into Postgres with the same rule as the feature
+worker: one SQL transaction holds the rows and the log position, and a transaction id keeps its
+first row. Under 42 forced crashes and a Postgres SIGKILL, the ledger ended with 124,146 rows
+for 124,146 logged decisions: 0 missing, 0 extra, 0 duplicates. It even holds 467 decisions the
+load generator had given up waiting for: a client timing out does not cancel a decision.
+
+### The race
+
+The API reads the window while the feature worker writes it, so a payment arriving within
+about half a second of its card's previous one can miss it. Two options were measured with
+same-card bursts:
+
+| Gap between a card's payments | Stale reads, one writer | Stale reads, read-your-writes |
+|---|---|---|
+| 10 ms | 76% | 30% |
+| 100 ms | 61% | 15% |
+| 500 ms | 5.1% (one event missed) | 0% |
+
+Read-your-writes (the API also writes the event to Redis after the log ack) costs 3.2 ms per
+request and a second writer per card, and cannot help while the previous request is still in
+flight. In the real data, only 0.014% of legitimate and 0.047% of fraudulent payments follow
+their card's previous one within a second. The single writer stays, and staleness is measured
+([ADR-013](adr/013-single-writer-and-measured-staleness.md)).
+
+### When the broker goes down
+
+Stopping Redpanda for 10 s at 200 requests a second produced 80 refusals (503, 0.44%): the 40
+threads in flight timed out twice. Every other request waited and succeeded once the broker
+returned, with latency up to 15 s. No decision was returned without a log entry, and the API
+keeps answering 503 rather than inventing a fallback
+([ADR-014](adr/014-broker-down-returns-503.md)). Full results: [notes/m5.md](../notes/m5.md).
+
+## 11. Engineering standards
 
 Every rule in the codebase is enforced by a tool in CI, not by memory, and determinism is designed
 in rather than tested in afterwards.
@@ -546,7 +618,7 @@ One command, `python scripts/ci.py`, runs these in order and stops at the first 
 3. **Types:** `mypy` in strict mode over the package, tests, scripts and experiments.
 4. **Layers:** `import-linter`'s three architecture contracts.
 5. **Line length:** at most 100 characters in Python and shell files.
-6. **Tests:** unit, contract and adapter suites (197 passing); integration suites run separately
+6. **Tests:** unit, contract, adapter and script suites (249 passing); integration suites run separately
    against the Docker stack.
 
 ### House rules
@@ -582,19 +654,18 @@ See [CODING_STANDARDS.md](../CODING_STANDARDS.md).
 | Replay | Level A and Level B equality checks against the memory reference |
 | Drills | Crash, kill and disorder scripts whose reports are committed in `notes/` |
 
-Twelve [architecture decision records](adr/) document the choices that shape the system, each
+Fourteen [architecture decision records](adr/) document the choices that shape the system, each
 with its context and consequences.
 
-## 11. What comes next, and what we learned
+## 12. What comes next, and what we learned
 
-The next milestone takes the same invariant to a live scoring API;
+The core milestones are done; what remains is optional operations work;
 the main lessons so far are about where guarantees really come from.
 
 ### Next milestones
 
 | Milestone | Goal | The question it answers |
 |---|---|---|
-| M5: the hot path | A FastAPI scoring endpoint, a Postgres decision ledger, load tests with p50, p95, p99 | Two payments from one card milliseconds apart: wait for the first write, or accept and measure the stale read? |
 | M6 (optional) | Drift reports, dashboards, a shadow model, delayed labels | How does the model age, and how would we know? |
 
 ### Lessons so far
@@ -609,10 +680,12 @@ the main lessons so far are about where guarantees really come from.
    feature that encoded the calendar.
 5. **Measure before tuning.** The lateness sweep showed that most error from late events cannot
    be fixed by keeping more history, which saved paying 25% more memory for nothing.
-6. **Reference implementations pay for themselves.** The in-memory store is short, obviously
+6. **Measure the measuring tool.** The first load test reported a slow API; the slow part was
+   the test client.
+7. **Reference implementations pay for themselves.** The in-memory store is short, obviously
    correct, and the yardstick for every check.
 
-## 12. Glossary
+## 13. Glossary
 
 | Term | Meaning |
 |---|---|

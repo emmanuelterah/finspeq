@@ -1,0 +1,10 @@
+{
+  "log_events": 138315,
+  "scored_transactions": 124146,
+  "rows": 124146,
+  "missing": 0,
+  "extra": 0,
+  "wrong_position": 0,
+  "positions_behind": 0,
+  "passed": true
+}

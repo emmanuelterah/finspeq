@@ -238,7 +238,7 @@ Each milestone ends with a replay test that passes and a short write-up in `note
 - Push the producer to more than 5k events per second; watch consumer lag; observe a rebalance mid-stream.
 - Handle rebalances correctly: commit on partition revoke, and avoid processing during the handoff.
 
-### M5: Hot path and the race
+### M5: Hot path and the race (done; results in notes/m5.md)
 
 - Build the FastAPI scoring endpoint: pipelined Redis read → ONNX → decision → publish.
 - **The race:** two transactions from the same card arrive milliseconds apart, so the second read can miss the first write.
@@ -278,5 +278,6 @@ bootstrap) and the test layout.
 1. ~~How long should late events be allowed to arrive (allowed lateness)?~~ Decided: 1 h; late
    events are applied (ADR-011).
 2. ~~Should `amount` live in a companion hash or in the ZSET member?~~ Decided: companion hash.
-3. Which side of the race to choose (M5): read-your-writes or measured staleness?
+3. ~~Which side of the race to choose: read-your-writes or measured staleness?~~ Decided:
+   measured staleness with one writer (ADR-013).
 4. ~~Publish before or after returning the decision?~~ Decided: before (ARCHITECTURE.md §4.6).

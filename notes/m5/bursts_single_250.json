@@ -1,0 +1,88 @@
+{
+  "arguments": {
+    "url": "http://127.0.0.1:18020",
+    "source": "data\\processed\\events_sorted.parquet",
+    "from_date": "2026-03-10",
+    "to_date": "2026-06-14",
+    "warmup_from": "2026-03-09",
+    "slice": "64:14",
+    "plan": "bursts",
+    "rate": "100.0",
+    "limit": "150",
+    "burst_size": "10",
+    "gap_ms": "250.0",
+    "stagger_ms": "20.0",
+    "connections": "200",
+    "output": "notes\\m5\\bursts_single_250.json"
+  },
+  "requests": 1380,
+  "elapsed_s": 5.0,
+  "achieved_rps": 276.1,
+  "statuses": {
+    "200": 1380
+  },
+  "errors": {},
+  "error_rate": 0.0,
+  "latency_ms": {
+    "p50": 232.61,
+    "p95": 1385.75,
+    "p99": 1975.98,
+    "max": 1996.71
+  },
+  "send_lag_ms": {
+    "p50": -14.31,
+    "p95": 5.51,
+    "p99": 17.59,
+    "max": 31.1
+  },
+  "steps_ms": {
+    "features": {
+      "p50": 0.08,
+      "p95": 0.16,
+      "p99": 0.25,
+      "max": 0.43
+    },
+    "predict": {
+      "p50": 1.16,
+      "p95": 3.5,
+      "p99": 8.02,
+      "max": 51.29
+    },
+    "publish": {
+      "p50": 6.43,
+      "p95": 19.54,
+      "p99": 27.84,
+      "max": 68.46
+    },
+    "read": {
+      "p50": 3.92,
+      "p95": 15.71,
+      "p99": 29.65,
+      "max": 43.89
+    }
+  },
+  "missing": {
+    "checked": 1380,
+    "stale": 623,
+    "stale_fraction": 0.45145,
+    "max": 6,
+    "negative": 0
+  },
+  "per_second": {
+    "0": {
+      "ok": 126
+    },
+    "1": {
+      "ok": 326
+    },
+    "2": {
+      "ok": 476
+    },
+    "3": {
+      "ok": 326
+    },
+    "4": {
+      "ok": 126
+    }
+  }
+}

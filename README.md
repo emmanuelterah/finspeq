@@ -11,7 +11,7 @@ measurements, not to assert it.
 ![mypy strict](https://img.shields.io/badge/mypy-strict-1F5082)
 ![ruff](https://img.shields.io/badge/lint-ruff-D7FF64)
 ![architecture](https://img.shields.io/badge/architecture-hexagonal-6E56CF)
-![status](https://img.shields.io/badge/milestones-M0%E2%80%93M4%20done-2EA44F)
+![status](https://img.shields.io/badge/milestones-M0%E2%80%93M5%20done-2EA44F)
 
 ---
 
@@ -29,23 +29,29 @@ Every number below comes from a run on one laptop. The raw reports are in [`note
 | Events delayed by up to 24 h, plus 1% duplicates, with 109 crashes | **0** differences against a replay of the same arrival order |
 | 8 workers on 8 partitions, rebalances, a stalled "zombie" worker | **0** differences; up to **24,063** events/s on a laptop |
 | Publishing without a key | Final state still matches, but **67%** of features are wrong when scored |
+| Scoring API at 100 requests/s, decision logged before answering | p50 **7.4 ms**, p99 **39 ms** |
+| Decision ledger through 42 crashes and a Postgres SIGKILL | **124,146** rows, **0** missing, **0** duplicates |
+| Broker stopped for 10 s at 200 requests/s | **80** requests refused (503), **0** decisions returned without a log entry |
 
 ## The idea in one picture
 
 ```mermaid
 flowchart LR
-    H[("History<br/>12.5 M transactions")] --> S["Simulator<br/>(delays, duplicates)"]
-    S -->|"key = card"| R[["Redpanda<br/>event log"]]
+    C(["Payment"]) --> API["Scoring API<br/>(FastAPI + ONNX)"]
+    X[("Redis<br/>24 h window per card")] -->|"read window"| API
+    API -->|"publish decision,<br/>wait for ack"| R[["Redpanda<br/>event log"]]
+    S["Simulator<br/>(replays history)"] -->|"key = card"| R
     R --> W["Feature worker"]
-    W -->|"one atomic Lua call:<br/>events + log position"| X[("Redis<br/>24 h window per card")]
-    X -.->|"M5: read window"| API["Scoring API<br/>(planned)"]
-    M["ONNX model"] -.-> API
-    API -.->|"M5: publish decision"| R
+    W -->|"one atomic Lua call:<br/>events + log position"| X
+    R --> L["Ledger worker"]
+    L -->|"one SQL transaction:<br/>rows + log position"| P[("Postgres<br/>decision ledger")]
 ```
 
-The event log is the only source of truth. Everything else is derived from it and can be thrown
-away and rebuilt. The worker stores how far it has read **in the same atomic step** as the data it
-wrote, so a crash can never leave the two out of step. That one rule is what makes replays exact.
+The event log is the only source of truth. The API's only write is to the log, and it answers
+only after the broker confirms it. Redis and Postgres are derived from the log and can be thrown
+away and rebuilt. Each worker stores how far it has read **in the same atomic step** as the data
+it wrote, so a crash can never leave the two out of step. That one rule is what makes replays
+exact.
 
 ## Why build this
 
@@ -91,15 +97,29 @@ finspeq-offline export --candidate-dir models/candidates/v2-none --threads 8
 </details>
 
 <details>
-<summary><b>Run the crash, disorder and scaling drills (M2 to M4)</b></summary>
+<summary><b>Run the scoring API and the ledger (M5)</b></summary>
+
+```bash
+python -m pip install -e ".[serving]"
+finspeq-serve --model-dir models/<version> --port 18000
+curl -s localhost:18000/readyz
+finspeq-stream ledger --idle-exit-s 10      # copy logged decisions into Postgres
+finspeq-stream verify-ledger                # compare the ledger with the log
+```
+
+</details>
+
+<details>
+<summary><b>Run the crash, disorder, scaling and hot-path drills (M2 to M5)</b></summary>
 
 ```bash
 bash scripts/m2_drills.sh    # crashes, naive counter, Redis kill, full rebuild
 bash scripts/m3_drills.sh    # delayed and duplicated events, lateness sweep
 bash scripts/m4_drills.sh    # partitions, workers, rebalances, zombie, live load
+bash scripts/m5_drills.sh    # latency, the race, broker down, ledger under crashes
 ```
 
-Reports land in `notes/m2/`, `notes/m3/` and `notes/m4/`.
+Reports land in `notes/m2/` to `notes/m5/`.
 
 </details>
 
@@ -120,7 +140,12 @@ Reports land in `notes/m2/`, `notes/m3/` and `notes/m4/`.
 5. **Ownership doesn't matter for correctness.** Several workers share the partitions; after
    a rebalance or a stalled worker's late write, the position check makes repeats no-ops
    ([ADR-012](docs/adr/012-partitioning-and-assignment.md)).
-6. **Late events are welcome.** Entries are kept for 24 h plus one hour of allowed lateness, and
+6. **No decision without a log entry.** The API publishes the payment and its decision, waits
+   for the broker, then answers. If the broker is down it answers 503
+   ([ADR-014](docs/adr/014-broker-down-returns-503.md)). The window it reads may miss a
+   same-card payment from the last half second; that is measured and accepted
+   ([ADR-013](docs/adr/013-single-writer-and-measured-staleness.md)).
+7. **Late events are welcome.** Entries are kept for 24 h plus one hour of allowed lateness, and
    late events are applied, never dropped ([ADR-011](docs/adr/011-allowed-lateness.md)).
 
 The full story, with the reasoning behind each choice, is in the
@@ -135,8 +160,8 @@ The full story, with the reasoning behind each choice, is in the
 | M2 | Crashes | "Effectively once" under 100+ hard crashes | Done |
 | M3 | Disorder and lateness | Exact replays with late and duplicate events; lateness chosen from data | Done |
 | M4 | Scaling out | Exact state through rebalances and zombies; why the key matters | Done |
-| M5 | Hot path | Scoring API, decision ledger, the read-after-write race | Next |
-| M6 | Operations | Drift reports, dashboards, a shadow model | Optional |
+| M5 | Hot path | Logged decisions in milliseconds, an exact ledger, the race measured | Done |
+| M6 | Operations | Drift reports, dashboards, a shadow model | Next (optional) |
 
 ## Project layout
 
@@ -144,13 +169,13 @@ The full story, with the reasoning behind each choice, is in the
 finspeq/
   domain/        value objects, card windows, features, decision policy (standard library only)
   application/   ports (typing.Protocol), messages, use cases
-  adapters/      inbound: CLIs, feature worker, fault injection
-                 outbound: Redis + Lua, Redpanda, Parquet, LightGBM, ONNX, Prometheus
-  bootstrap/     one composition root per process: offline.py, streaming.py
+  adapters/      inbound: HTTP API, CLIs, consumer loop, fault injection
+                 outbound: Redis + Lua, Redpanda, Postgres, Parquet, LightGBM, ONNX, Prometheus
+  bootstrap/     one composition root per process: offline.py, streaming.py, serving.py
 tests/           unit, contract (one suite per port, run against every adapter), integration
 scripts/         CI, data preparation, crash drills
 experiments/     the deliberately wrong naive counter used as a baseline in M2
-docs/adr/        twelve architecture decision records
+docs/adr/        fourteen architecture decision records
 notes/           results of every milestone, with raw JSON reports
 ```
 
@@ -176,7 +201,7 @@ The dependency rule (domain ← application ← adapters ← bootstrap) is enfor
 | [DESIGN.md](DESIGN.md) | Goals, the core invariant, data profile, milestone plan |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Hexagonal design, SOLID, ACID analysis, failure modes |
 | [docs/adr/](docs/adr/) | Every significant decision, with context and consequences |
-| [notes/](notes/) | Measured results of M0 to M4 |
+| [notes/](notes/) | Measured results of M0 to M5 |
 
 ## Data
 

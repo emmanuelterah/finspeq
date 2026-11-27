@@ -1,0 +1,762 @@
+{
+  "runs_total": 44,
+  "exit_codes": {
+    "137": 42,
+    "1": 1,
+    "0": 1
+  },
+  "seconds": 332.9,
+  "max_divergence": 0,
+  "runs_with_divergence": 0,
+  "redis_kill": null,
+  "runs": [
+    {
+      "run": 0,
+      "exit_code": 137,
+      "seconds": 3.297,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        3000,
+        null
+      ]
+    },
+    {
+      "run": 1,
+      "exit_code": 1,
+      "seconds": 5.203,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        3000,
+        null
+      ]
+    },
+    {
+      "run": 2,
+      "exit_code": 137,
+      "seconds": 2.36,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        5000,
+        null
+      ]
+    },
+    {
+      "run": 3,
+      "exit_code": 137,
+      "seconds": 5.563,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        6200,
+        null
+      ]
+    },
+    {
+      "run": 4,
+      "exit_code": 137,
+      "seconds": 6.547,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        10000,
+        null
+      ]
+    },
+    {
+      "run": 5,
+      "exit_code": 137,
+      "seconds": 6.109,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        13200,
+        null
+      ]
+    },
+    {
+      "run": 6,
+      "exit_code": 137,
+      "seconds": 5.39,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        13800,
+        null
+      ]
+    },
+    {
+      "run": 7,
+      "exit_code": 137,
+      "seconds": 6.031,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        16600,
+        null
+      ]
+    },
+    {
+      "run": 8,
+      "exit_code": 137,
+      "seconds": 6.0,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        null,
+        null,
+        19200,
+        null
+      ]
+    },
+    {
+      "run": 9,
+      "exit_code": 137,
+      "seconds": 7.796,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        2770,
+        null,
+        25430,
+        null
+      ]
+    },
+    {
+      "run": 10,
+      "exit_code": 137,
+      "seconds": 7.25,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        5292,
+        null,
+        29508,
+        null
+      ]
+    },
+    {
+      "run": 11,
+      "exit_code": 137,
+      "seconds": 5.219,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        5292,
+        null,
+        29708,
+        null
+      ]
+    },
+    {
+      "run": 12,
+      "exit_code": 137,
+      "seconds": 5.375,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        5292,
+        null,
+        30508,
+        null
+      ]
+    },
+    {
+      "run": 13,
+      "exit_code": 137,
+      "seconds": 5.766,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        5292,
+        null,
+        32108,
+        null
+      ]
+    },
+    {
+      "run": 14,
+      "exit_code": 137,
+      "seconds": 5.328,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        5892,
+        null,
+        32108,
+        null
+      ]
+    },
+    {
+      "run": 15,
+      "exit_code": 137,
+      "seconds": 5.985,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        8074,
+        null,
+        32526,
+        null
+      ]
+    },
+    {
+      "run": 16,
+      "exit_code": 137,
+      "seconds": 9.094,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        14457,
+        null,
+        34473,
+        1470
+      ]
+    },
+    {
+      "run": 17,
+      "exit_code": 137,
+      "seconds": 5.328,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        14457,
+        null,
+        34473,
+        3270
+      ]
+    },
+    {
+      "run": 18,
+      "exit_code": 137,
+      "seconds": 7.843,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        18543,
+        null,
+        34473,
+        5184
+      ]
+    },
+    {
+      "run": 19,
+      "exit_code": 137,
+      "seconds": 5.031,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        18543,
+        null,
+        34473,
+        5184
+      ]
+    },
+    {
+      "run": 20,
+      "exit_code": 137,
+      "seconds": 5.797,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        20819,
+        null,
+        34473,
+        5508
+      ]
+    },
+    {
+      "run": 21,
+      "exit_code": 137,
+      "seconds": 6.0,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        20819,
+        null,
+        34473,
+        8308
+      ]
+    },
+    {
+      "run": 22,
+      "exit_code": 137,
+      "seconds": 9.328,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        24672,
+        2390,
+        34473,
+        12665
+      ]
+    },
+    {
+      "run": 23,
+      "exit_code": 137,
+      "seconds": 5.25,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        24672,
+        3390,
+        34473,
+        12665
+      ]
+    },
+    {
+      "run": 24,
+      "exit_code": 137,
+      "seconds": 7.375,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        26956,
+        5502,
+        34473,
+        12669
+      ]
+    },
+    {
+      "run": 25,
+      "exit_code": 137,
+      "seconds": 5.266,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        27156,
+        5502,
+        34473,
+        12669
+      ]
+    },
+    {
+      "run": 26,
+      "exit_code": 137,
+      "seconds": 5.172,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        27156,
+        5502,
+        34473,
+        12669
+      ]
+    },
+    {
+      "run": 27,
+      "exit_code": 137,
+      "seconds": 5.484,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        27156,
+        5502,
+        34473,
+        12669
+      ]
+    },
+    {
+      "run": 28,
+      "exit_code": 137,
+      "seconds": 5.187,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        29156,
+        5502,
+        34473,
+        12669
+      ]
+    },
+    {
+      "run": 29,
+      "exit_code": 137,
+      "seconds": 7.328,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        31407,
+        7611,
+        34473,
+        13309
+      ]
+    },
+    {
+      "run": 30,
+      "exit_code": 137,
+      "seconds": 6.25,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        33390,
+        8428,
+        34473,
+        13309
+      ]
+    },
+    {
+      "run": 31,
+      "exit_code": 137,
+      "seconds": 5.515,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34390,
+        8428,
+        34473,
+        13309
+      ]
+    },
+    {
+      "run": 32,
+      "exit_code": 137,
+      "seconds": 6.219,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        10848,
+        34473,
+        13309
+      ]
+    },
+    {
+      "run": 33,
+      "exit_code": 137,
+      "seconds": 6.547,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        12926,
+        34473,
+        15187
+      ]
+    },
+    {
+      "run": 34,
+      "exit_code": 137,
+      "seconds": 6.875,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        15234,
+        34473,
+        17465
+      ]
+    },
+    {
+      "run": 35,
+      "exit_code": 137,
+      "seconds": 7.0,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        17293,
+        34473,
+        19420
+      ]
+    },
+    {
+      "run": 36,
+      "exit_code": 137,
+      "seconds": 5.579,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        18163,
+        34473,
+        19420
+      ]
+    },
+    {
+      "run": 37,
+      "exit_code": 137,
+      "seconds": 5.485,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        18963,
+        34473,
+        19420
+      ]
+    },
+    {
+      "run": 38,
+      "exit_code": 137,
+      "seconds": 5.813,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        20563,
+        34473,
+        19420
+      ]
+    },
+    {
+      "run": 39,
+      "exit_code": 137,
+      "seconds": 6.047,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        22885,
+        34473,
+        19498
+      ]
+    },
+    {
+      "run": 40,
+      "exit_code": 137,
+      "seconds": 10.14,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        27117,
+        34473,
+        25666
+      ]
+    },
+    {
+      "run": 41,
+      "exit_code": 137,
+      "seconds": 5.281,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        27517,
+        34473,
+        25666
+      ]
+    },
+    {
+      "run": 42,
+      "exit_code": 137,
+      "seconds": 7.016,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        29921,
+        34473,
+        27862
+      ]
+    },
+    {
+      "run": 43,
+      "exit_code": 0,
+      "seconds": 26.297,
+      "stored_offsets": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "committed_offsets": [
+        34614,
+        35651,
+        34473,
+        33577
+      ]
+    }
+  ]
+}

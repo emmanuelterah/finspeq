@@ -457,19 +457,20 @@ This settles open question 4 in DESIGN.md: **publish before responding.**
 
 ## 7. Hot-path latency budget (p99 target 50 ms)
 
-These are planned budgets, to be measured in M5.
+Budgets were planned before M5; the measured column is M5 at 100 requests/s on one laptop
+(`notes/m5.md`), p50 / p99.
 
-| Step | Budget |
-|---|---|
-| HTTP parse and Pydantic validation | 2 ms |
-| Redis window read (one round trip, about 6 entries/day per card) | 2 ms |
-| Feature computation (pure Python) | 1 ms |
-| ONNX predict (single thread) | 3 ms |
-| Publish and broker ack | 5 ms |
-| Headroom for queueing, GC, scheduling | 37 ms |
+| Step | Budget | Measured |
+|---|---|---|
+| HTTP parse and Pydantic validation | 2 ms | not split out |
+| Redis window read (one round trip, about 6 entries/day per card) | 2 ms | 1.5 / 4.9 ms |
+| Feature computation (pure Python) | 1 ms | 0.06 / 0.14 ms |
+| ONNX predict (single thread) | 3 ms | 0.44 / 1.2 ms |
+| Publish and broker ack | 5 ms | 11.3 / 19.1 ms at linger 1 ms; 4.5 ms p50 at linger 0 |
+| Headroom for queueing, GC, scheduling | 37 ms | end to end 7.4 / 39 ms |
 
-Open for M5: async route with `redis.asyncio` versus a sync route in the threadpool, and the number of
-uvicorn workers.
+The sync route in the thread pool was kept; one process saturates at about 310–370 requests/s
+on the laptop.
 
 ---
 
@@ -517,6 +518,8 @@ the API fill it with the vector, score, decision, and model version.
 | 010 | Crash testing: seeded fault injection, supervisor drills, naive baseline | Accepted |
 | 011 | Allowed lateness 1 h; late events are applied, never dropped | Accepted |
 | 012 | Keyed partitioning required; recovery never depends on partition ownership | Accepted |
+| 013 | One writer per card; hot-path staleness is measured, not removed | Accepted |
+| 014 | When the broker is down, the API answers 503 | Accepted |
 
 Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, consequences.
 
@@ -525,6 +528,6 @@ Full ADRs go in `docs/adr/NNN-title.md`, one page each: context, decision, conse
 ## 10. Open questions
 
 1. ~~Allowed-lateness value and late-event policy.~~ Decided in M3: 1 h, apply (ADR-011).
-2. The hot path when the broker is down: 503 (current default) or fail to `REVIEW`.
-3. Async versus sync FastAPI route (M5 benchmark).
+2. ~~The hot path when the broker is down.~~ Decided in M5: 503 (ADR-014).
+3. ~~Async versus sync FastAPI route.~~ Sync route kept in M5; async not benchmarked.
 4. JSON versus a binary envelope (`msgspec`) if serialization shows up in profiles.
