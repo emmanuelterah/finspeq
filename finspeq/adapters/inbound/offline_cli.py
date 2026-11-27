@@ -17,6 +17,7 @@ from finspeq.adapters.inbound.selection import (
     disorder_from,
     selection_from,
 )
+from finspeq.application.delayed_labels import LabelDelay
 from finspeq.application.disorder import Disorder
 from finspeq.application.messages import Imbalance, ModelArtifact, TimeRange
 from finspeq.domain.model import EventTime
@@ -95,8 +96,32 @@ class LatenessSweepCommand:
     consumer_batch_size: int
 
 
+@dataclass(frozen=True, slots=True)
+class DriftCommand:
+    """Arguments of `drift`: PSI of every dataset part (month) against the TRAIN split."""
+
+    dataset_dir: Path
+    bins: int
+    alert_psi: float
+    reference_output: Path
+    output: Path
+
+
+@dataclass(frozen=True, slots=True)
+class DelayedLabelsCommand:
+    """Arguments of `delayed-labels`: rolling recall on TEST as chargebacks arrive."""
+
+    dataset_dir: Path
+    model_dir: Path
+    delay: LabelDelay
+    window_days: int
+    output: Path
+
+
 Command = (
     BuildDatasetCommand
+    | DriftCommand
+    | DelayedLabelsCommand
     | DatasetManifestCommand
     | TrainCommand
     | BaselinesCommand
@@ -142,7 +167,17 @@ def parse(argv: Sequence[str]) -> Command:
         help="model unkeyed publishing over this many partitions (M4 experiment)",
     )
     sweep.add_argument("--consumer-batch-size", type=int, default=500)
+    _add_monitoring_commands(commands)
     args = parser.parse_args(list(argv))
+    if args.command == "drift":
+        return DriftCommand(
+            args.dataset_dir, args.bins, args.alert_psi, args.reference_output, args.output
+        )
+    if args.command == "delayed-labels":
+        delay = LabelDelay(args.min_days, args.mode_days, args.max_days, args.seed)
+        return DelayedLabelsCommand(
+            args.dataset_dir, args.model_dir, delay, args.window_days, args.output
+        )
     if args.command == "build-dataset":
         return BuildDatasetCommand(
             source=args.source,
@@ -190,6 +225,29 @@ def _add_model_commands(commands: argparse._SubParsersAction[argparse.ArgumentPa
     export.add_argument("--warmup-calls", type=int, default=1_000)
     export.add_argument("--calls", type=int, default=10_000)
     export.add_argument("--threads", type=int, default=4)
+
+
+def _add_monitoring_commands(
+    commands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Add the drift and delayed-labels sub-commands to commands."""
+    drift = commands.add_parser("drift", help="PSI per feature and month against TRAIN")
+    drift.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
+    drift.add_argument("--bins", type=int, default=10)
+    drift.add_argument("--alert-psi", type=float, default=0.2)
+    drift.add_argument(
+        "--reference-output", type=Path, default=Path("notes/m6/drift_reference.json")
+    )
+    drift.add_argument("--output", type=Path, default=Path("notes/m6/drift_monthly.json"))
+    labels = commands.add_parser("delayed-labels", help="recall as chargebacks arrive")
+    labels.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
+    labels.add_argument("--model-dir", type=Path, required=True)
+    labels.add_argument("--min-days", type=float, default=7.0)
+    labels.add_argument("--mode-days", type=float, default=21.0)
+    labels.add_argument("--max-days", type=float, default=60.0)
+    labels.add_argument("--seed", type=int, default=0)
+    labels.add_argument("--window-days", type=int, default=30)
+    labels.add_argument("--output", type=Path, default=Path("notes/m6/delayed_labels.json"))
 
 
 def _model_command(args: argparse.Namespace) -> Command:

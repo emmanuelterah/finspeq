@@ -81,3 +81,15 @@ def load_split(dataset: DatasetRef, split: Split) -> tuple[Matrix, Labels]:
     if not matrices:
         return np.empty((0, len(names)), dtype=np.float32), np.empty(0, dtype=np.bool_)
     return np.concatenate(matrices), np.concatenate(labels)
+
+
+def load_split_times(dataset: DatasetRef, split: Split) -> npt.NDArray[np.int64]:
+    """Return the event time (epoch seconds) of every row of split, in load_split's order."""
+    times: list[npt.NDArray[np.int64]] = []
+    for path in part_paths(dataset):
+        columns = ["time", "split"]
+        for batch in pq.ParquetFile(path).iter_batches(batch_size=READ_BATCH_ROWS, columns=columns):
+            rows = batch.filter(pc.equal(batch.column("split"), split.value))
+            if rows.num_rows:
+                times.append(rows.column("time").to_numpy().astype(np.int64))
+    return np.concatenate(times) if times else np.empty(0, dtype=np.int64)

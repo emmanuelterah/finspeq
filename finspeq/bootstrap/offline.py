@@ -12,13 +12,22 @@ from finspeq.adapters.inbound.output import render, write_json
 from finspeq.adapters.outbound.baselines import LogisticBaselineScorer, RuleBaselineScorer
 from finspeq.adapters.outbound.clock import SystemClock
 from finspeq.adapters.outbound.dataset_manifest import dataset_ref, write_manifest
+from finspeq.adapters.outbound.drift_data import part_counts, reference_from_split
+from finspeq.adapters.outbound.drift_reference import write_reference
 from finspeq.adapters.outbound.lightgbm_model import LightGBMScorer, LightGBMTrainer
 from finspeq.adapters.outbound.memory_window import MemoryWindowStore
 from finspeq.adapters.outbound.onnx_model import OnnxBatchScorer, OnnxExporter, OnnxFraudModel
 from finspeq.adapters.outbound.parquet import ParquetHistoricalSource, ParquetTrainingSink
-from finspeq.adapters.outbound.training_data import feature_layout, load_split
+from finspeq.adapters.outbound.training_data import feature_layout, load_split, load_split_times
 from finspeq.application.build_dataset import BuildPlan, BuildTrainingSet, SplitBoundaries
+from finspeq.application.delayed_labels import (
+    SECONDS_PER_DAY,
+    Observation,
+    RollingRecall,
+    label_arrivals,
+)
 from finspeq.application.disorder import arrival_order, round_robin_consumption
+from finspeq.application.drift import MeasureDrift
 from finspeq.application.lateness import LatenessReport, LatenessSweep, Scoring
 from finspeq.application.messages import (
     DatasetSummary,
@@ -40,6 +49,7 @@ from finspeq.domain.features import FEATURE_SET_V2, FEATURE_SETS, FeatureSet, Fe
 from finspeq.domain.policy import DecisionPolicy
 
 BENCHMARK_VECTORS = 1_000
+SECONDS_PER_WEEK = 7 * 86_400
 EVALUATED_SPLITS = (Split.VALID, Split.TEST)
 
 
@@ -190,6 +200,60 @@ def run_lateness_sweep(command: offline_cli.LatenessSweepCommand) -> LatenessRep
     return report
 
 
+def run_drift(command: offline_cli.DriftCommand) -> dict[str, object]:
+    """Build the TRAIN reference, measure every month's PSI, and write both reports."""
+    dataset = dataset_ref(command.dataset_dir, _feature_set_of(command.dataset_dir).version)
+    reference = reference_from_split(dataset, Split.TRAIN, command.bins)
+    write_reference(reference, command.reference_output)
+    use_case = MeasureDrift(reference, command.alert_psi)
+    reports = [
+        use_case.from_counts(label, counts) for label, counts in part_counts(dataset, reference)
+    ]
+    result: dict[str, object] = {
+        "reference_rows": reference.rows,
+        "alert_psi": command.alert_psi,
+        "months": reports,
+    }
+    write_json(command.output, result)
+    return result
+
+
+def run_delayed_labels(command: offline_cli.DelayedLabelsCommand) -> dict[str, object]:
+    """Score TEST, simulate chargeback arrival, and write weekly rolling recall.
+
+    A transaction is flagged when its score reaches the model's REVIEW threshold. As-of days
+    run weekly from the first TEST day plus the window until the window has passed the last
+    TEST event; days whose window holds no fraud are left out.
+    """
+    dataset = dataset_ref(command.dataset_dir, _feature_set_of(command.dataset_dir).version)
+    model = OnnxFraudModel(str(command.model_dir))
+    scored = OnnxBatchScorer(str(command.model_dir)).score(dataset, Split.TEST)
+    times = load_split_times(dataset, Split.TEST).tolist()
+    review = model.thresholds.review
+    observations = [
+        Observation(int(time), score >= review, bool(label))
+        for time, score, label in zip(times, scored.scores, scored.labels, strict=True)
+    ]
+    arrivals = label_arrivals(observations, command.delay)
+    first = min(times) - min(times) % SECONDS_PER_DAY + SECONDS_PER_DAY * command.window_days
+    last = max(times) + command.window_days * SECONDS_PER_DAY
+    as_of = list(range(first, last, SECONDS_PER_WEEK))
+    points = [
+        point
+        for point in RollingRecall(command.window_days).execute(observations, arrivals, as_of)
+        if point.frauds
+    ]
+    result: dict[str, object] = {
+        "model_version": model.version,
+        "review_threshold": review,
+        "delay": command.delay,
+        "window_days": command.window_days,
+        "points": points,
+    }
+    write_json(command.output, result)
+    return result
+
+
 def _feature_set_of(dataset_dir: Path) -> FeatureSet:
     """Return the registered feature set whose version and names match the dataset's parts.
 
@@ -213,6 +277,8 @@ def main(argv: Sequence[str]) -> int:
         offline_cli.BaselinesCommand: run_baselines,
         offline_cli.ExportCommand: run_export,
         offline_cli.LatenessSweepCommand: run_lateness_sweep,
+        offline_cli.DriftCommand: run_drift,
+        offline_cli.DelayedLabelsCommand: run_delayed_labels,
     }
     print(render(handlers[type(command)](command)))
     return 0

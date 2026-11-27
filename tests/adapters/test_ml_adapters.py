@@ -18,6 +18,8 @@ import numpy as np
 
 from finspeq.adapters.outbound.baselines import LogisticBaselineScorer, RuleBaselineScorer
 from finspeq.adapters.outbound.dataset_manifest import dataset_ref, write_manifest
+from finspeq.adapters.outbound.drift_data import part_counts, reference_from_split
+from finspeq.adapters.outbound.drift_reference import read_reference, write_reference
 from finspeq.adapters.outbound.lightgbm_model import LightGBMScorer, LightGBMTrainer
 from finspeq.adapters.outbound.onnx_model import (
     OnnxBatchScorer,
@@ -26,7 +28,8 @@ from finspeq.adapters.outbound.onnx_model import (
     float32_exact_model,
 )
 from finspeq.adapters.outbound.parquet import ParquetTrainingSink
-from finspeq.adapters.outbound.training_data import load_split
+from finspeq.adapters.outbound.training_data import load_split, load_split_times
+from finspeq.application.drift import MeasureDrift, bin_counts
 from finspeq.application.messages import DatasetRef, Split, TrainingRow, TrainParams
 from finspeq.application.modeling import EvaluateScorer, VerifyParity
 from finspeq.domain.errors import SchemaMismatchError
@@ -164,3 +167,26 @@ def test_baselines_rank_better_than_chance(dataset: DatasetRef) -> None:
     for scorer in (RuleBaselineScorer(), LogisticBaselineScorer(stride=2)):
         (result,) = EvaluateScorer(scorer).execute(dataset, (Split.TEST,))
         assert result.evaluation.roc_auc > 0.5
+
+
+def test_drift_reference_and_part_counts_agree_with_pure_python(
+    dataset: DatasetRef, tmp_path: Path
+) -> None:
+    """Bin TRAIN by quantiles; numpy part counts equal the application's bisect counts."""
+    reference = reference_from_split(dataset, Split.TRAIN, bins=10)
+    assert reference.rows == 3_000
+    for feature in reference.features:
+        assert abs(sum(feature.shares) - 1.0) < 1e-9
+    path = tmp_path / "reference.json"
+    write_reference(reference, path)
+    assert read_reference(path) == reference
+    ((label, counts),) = list(part_counts(dataset, reference))
+    matrix = np.concatenate([load_split(dataset, split)[0] for split in Split])
+    first = reference.features[0]
+    values = matrix[:, 0].astype(np.float64).tolist()
+    assert counts[first.name] == bin_counts(values, first.edges)
+    report = MeasureDrift(reference).from_counts(label, counts)
+    assert report.rows == 5_000
+    assert all(value < 0.2 for _, value in report.psi)
+    times = load_split_times(dataset, Split.VALID)
+    assert len(times) == 1_000
