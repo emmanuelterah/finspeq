@@ -790,6 +790,27 @@ All milestones are done; the main lessons are about where guarantees really come
 - Retraining with the measured staleness, if real traffic ever shows a same-card rate near the
   replay's.
 
+### From niche to production
+
+> **In plain terms.** The ideas here are the ones a bank would need; the setup around them is
+> not. Real traffic, real card data and real failures need more machines, strong security and
+> people on call.
+
+Finspeq is a study of the hard part of a streaming fraud system, not a deployable product: the
+design carries over, the deployment does not. The log as the only record, positions stored with
+the state, the 503 rule, the exact ledger, replay checks and the live-versus-offline skew check
+all apply unchanged. What a production system would add:
+
+| Area | In Finspeq | In production |
+|---|---|---|
+| Throughput | One API process: p99 39 ms at 100 requests/s, saturating at 310–370 requests/s on one Intel Core i7 machine | Many API instances behind a load balancer, load-tested to peak card traffic |
+| Availability | One Redpanda broker (replication factor 1), one Redis, one Postgres | Three or more brokers with replication, Redis replicas, Postgres with failover, instances across zones |
+| Security | Card numbers in plain text; no TLS, no API authentication | PCI DSS: tokenised card numbers, TLS and encryption at rest, access control, audit logs |
+| Model | Trained on synthetic Sparkov data | Real labelled history, scheduled retraining, rules beside the model |
+| Broker outage | Requests wait up to 5 s each, latency reached 15 s | A circuit breaker that fails fast after the first time-outs |
+| Staleness | Measured on replayed history | Measured again on real traffic before it is trusted |
+| Operations | Docker Compose and a Grafana dashboard | A deployment pipeline, infrastructure as code, alerts with on-call runbooks, secrets management, tested backups |
+
 ### Lessons
 
 1. **Store the bookmark with the data.** Almost every guarantee here follows from writing the log

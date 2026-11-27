@@ -189,6 +189,23 @@ The full story, with the reasoning behind each choice, is in the
 | M5 | Hot path | Logged decisions in milliseconds, an exact ledger, the race measured | Done |
 | M6 | Operations | Drift vs skew, delayed labels, a shadow model, Kafka transactions, Grafana | Done |
 
+## From niche to production
+
+Finspeq is a study of the hard part of a streaming fraud system, not a deployable product: the
+design carries over, the deployment does not. The log as the only record, positions stored with
+the state, the 503 rule, the exact ledger, replay checks and the live-versus-offline skew check
+all apply unchanged. What a production system would add:
+
+| Area | In Finspeq | In production |
+|---|---|---|
+| Throughput | One API process: p99 39 ms at 100 requests/s, saturating at 310–370 requests/s on one Intel Core i7 machine | Many API instances behind a load balancer, load-tested to peak card traffic |
+| Availability | One Redpanda broker (replication factor 1), one Redis, one Postgres | Three or more brokers with replication, Redis replicas, Postgres with failover, instances across zones |
+| Security | Card numbers in plain text; no TLS, no API authentication | PCI DSS: tokenised card numbers, TLS and encryption at rest, access control, audit logs |
+| Model | Trained on synthetic Sparkov data | Real labelled history, scheduled retraining, rules beside the model |
+| Broker outage | Requests wait up to 5 s each, latency reached 15 s | A circuit breaker that fails fast after the first time-outs |
+| Staleness | Measured on replayed history | Measured again on real traffic before it is trusted |
+| Operations | Docker Compose and a Grafana dashboard | A deployment pipeline, infrastructure as code, alerts with on-call runbooks, secrets management, tested backups |
+
 ## Project layout
 
 ```
