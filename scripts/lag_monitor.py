@@ -2,7 +2,8 @@
 
 Lag is measured against the position stored with the state (ADR-003), not the group offset.
 Stops after --duration-s, or once lag has been zero for --settle-s after having been positive.
-Writes the samples and a summary as JSON.
+Writes the samples and a summary as JSON. With --metrics-url, each sample also records the
+sum of the worker's fq_consumer_lag gauge read from that Prometheus page at the same moment.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import argparse
 import itertools
 import json
 import time
+import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -20,15 +22,22 @@ from confluent_kafka import Consumer, TopicPartition
 from finspeq.adapters.outbound.redis_window import RedisWindowStore
 
 WATERMARK_TIMEOUT_S = 5.0
+METRICS_TIMEOUT_S = 2.0
+GAUGE_PREFIX = "fq_consumer_lag{"
 
 
 @dataclass(frozen=True, slots=True)
 class Sample:
-    """One measurement: seconds since start, per-partition end offsets and applied counts."""
+    """One measurement: seconds since start, per-partition end offsets and applied counts.
+
+    gauge is the sum of fq_consumer_lag over partitions at the same moment, or None when no
+    metrics page was read or the gauge was not there yet.
+    """
 
     t: float
     end_offsets: list[int]
     applied: list[int]
+    gauge: int | None = None
 
     @property
     def lag(self) -> int:
@@ -73,6 +82,23 @@ def applied_counts(store: RedisWindowStore, partitions: int) -> list[int]:
     return [0 if p is None else p.offset + 1 for p in positions]
 
 
+def gauge_sum(page: str) -> int | None:
+    """Return the sum of every fq_consumer_lag sample in a Prometheus text page, or None."""
+    values = [
+        float(line.rsplit(" ", 1)[1]) for line in page.splitlines() if line.startswith(GAUGE_PREFIX)
+    ]
+    return round(sum(values)) if values else None
+
+
+def read_gauge(url: str) -> int | None:
+    """Return gauge_sum of the page at url, or None if the page cannot be read."""
+    try:
+        with urllib.request.urlopen(url, timeout=METRICS_TIMEOUT_S) as response:
+            return gauge_sum(response.read().decode("utf-8"))
+    except OSError:
+        return None
+
+
 def summarize(samples: list[Sample]) -> Summary:
     """Return the peak lag, the drain window and rate, and the longest stall of samples."""
     max_lag = max((s.lag for s in samples), default=0)
@@ -110,6 +136,7 @@ def main() -> None:
     parser.add_argument("--interval-s", type=float, default=1.0)
     parser.add_argument("--duration-s", type=float, default=600.0)
     parser.add_argument("--settle-s", type=float, default=5.0)
+    parser.add_argument("--metrics-url", help="worker metrics page, e.g. http://127.0.0.1:9101/")
     args = parser.parse_args()
     consumer = Consumer(
         {
@@ -129,6 +156,7 @@ def main() -> None:
                 round(now, 3),
                 end_offsets(consumer, args.topic, args.partitions),
                 applied_counts(store, args.partitions),
+                read_gauge(args.metrics_url) if args.metrics_url else None,
             )
             samples.append(sample)
             progressed = sum(sample.applied) > sum(samples[0].applied)
