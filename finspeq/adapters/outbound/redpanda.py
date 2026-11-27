@@ -1,9 +1,12 @@
-"""Kafka-protocol (Redpanda) implementations of EventPublisher, BulkPublisher, and EventSource."""
+"""Kafka-protocol (Redpanda) implementations of the publisher and event source ports."""
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -17,13 +20,21 @@ from finspeq.domain.model import Transaction
 from finspeq.domain.scored import ScoredTransaction
 
 POLL_INTERVAL_S = 0.05
+DEFAULT_MESSAGE_TIMEOUT_MS = 300_000
+ACK_GRACE_S = 1.0
 UNASSIGNED_PARTITION = -1
 COOPERATIVE_STRATEGY = "cooperative-sticky"
 
 
-def producer_config(bootstrap: str, linger_ms: int) -> dict[str, str | int | bool]:
-    """Return producer settings: idempotent, acks=all, murmur2 partitioning, IPv4 only."""
+def producer_config(
+    bootstrap: str, linger_ms: int, message_timeout_ms: int = DEFAULT_MESSAGE_TIMEOUT_MS
+) -> dict[str, str | int | bool]:
+    """Return producer settings: idempotent, acks=all, murmur2 partitioning, IPv4 only.
+
+    A message not acknowledged within message_timeout_ms fails with a delivery error.
+    """
     return {
+        "message.timeout.ms": message_timeout_ms,
         "bootstrap.servers": bootstrap,
         "broker.address.family": "v4",
         "enable.idempotence": True,
@@ -212,6 +223,81 @@ class RedpandaPublisher(EventPublisher, BulkPublisher):
         return partition
 
 
+class ConcurrentPublisher(EventPublisher):
+    """Publishes from many threads at once; each call waits only for its own ack.
+
+    A background thread serves delivery callbacks; each produce call gets a Future that its
+    delivery callback resolves. Call start() before publishing and close() at shutdown.
+    """
+
+    def __init__(self, producer: ProducerLike, topic: str, timeout_s: float) -> None:
+        """Create a publisher that waits up to timeout_s + ACK_GRACE_S for each delivery report.
+
+        Configure the producer's message.timeout.ms to timeout_s, so that every message gets a
+        report (delivered or expired) before the caller stops waiting: a caller that is told
+        the publish failed can rely on the event never reaching the log.
+        """
+        self._producer = producer
+        self._topic = topic
+        self._timeout_s = timeout_s
+        self._stop = threading.Event()
+        self._poller = threading.Thread(target=self._serve, name="producer-poll", daemon=True)
+
+    def start(self) -> None:
+        """Start the thread that serves delivery callbacks."""
+        self._poller.start()
+
+    def close(self) -> None:
+        """Deliver queued messages for up to timeout_s seconds, then stop the poll thread."""
+        self._producer.flush(self._timeout_s)
+        self._stop.set()
+        self._poller.join(timeout=self._timeout_s)
+
+    def publish_raw(self, tx: Transaction) -> EventPosition:
+        """Append tx without a decision record and return its position after the broker ack."""
+        return self._send(*encode(tx, None))
+
+    def publish_scored(self, scored: ScoredTransaction) -> EventPosition:
+        """Append scored and return its position after the broker ack."""
+        return self._send(*encode(scored.transaction, scored.record))
+
+    def _send(self, key: bytes, value: bytes) -> EventPosition:
+        """Produce one message and wait for its delivery report.
+
+        Raises:
+            PublishFailedError: The local queue is full, the broker reported an error, or no
+                report arrived within the timeout.
+        """
+        outcome: Future[EventPosition] = Future()
+
+        def on_delivery(error: KafkaError | None, message: Message) -> None:
+            """Resolve the outcome with the position, or fail it with the broker error."""
+            if error is not None:
+                outcome.set_exception(PublishFailedError(f"delivery failed: {error}"))
+            else:
+                outcome.set_result(position_of(message))
+
+        try:
+            self._producer.produce(
+                self._topic,
+                value=value,
+                key=key,
+                partition=UNASSIGNED_PARTITION,
+                on_delivery=on_delivery,
+            )
+        except BufferError as exc:
+            raise PublishFailedError("producer queue is full") from exc
+        try:
+            return outcome.result(timeout=self._timeout_s + ACK_GRACE_S)
+        except FutureTimeoutError as exc:
+            raise PublishFailedError(f"no delivery report within {self._timeout_s} s") from exc
+
+    def _serve(self) -> None:
+        """Serve delivery callbacks every POLL_INTERVAL_S until close() is called."""
+        while not self._stop.is_set():
+            self._producer.poll(POLL_INTERVAL_S)
+
+
 @dataclass(frozen=True, slots=True)
 class RebalanceEvent:
     """One change of a consumer's assignment.
@@ -270,6 +356,7 @@ class RedpandaSource(EventSource):
         self._wall_clock = options.wall_clock
         self._buffers: dict[int, list[Event]] = {}
         self.rebalances: list[RebalanceEvent] = []
+        self.transient_errors = 0
 
     def start(self) -> None:
         """Join the consumer group with the assignment callbacks."""
@@ -317,14 +404,19 @@ class RedpandaSource(EventSource):
         """Decode message and append it to its partition's buffer.
 
         A maximum-poll-interval error is recorded as a "poll-timeout" rebalance event and
-        skipped: the consumer rejoins the group on its next poll.
+        skipped: the consumer rejoins the group on its next poll. Other non-fatal client errors
+        (for example a broker connection lost) are counted in transient_errors and skipped,
+        because the client reconnects by itself.
 
         Raises:
-            PortError: message carries any other consumer error.
+            PortError: message carries a fatal error or an error that is not a KafkaError.
         """
         error = message.error()
         if isinstance(error, KafkaError) and error.code() == KafkaError._MAX_POLL_EXCEEDED:
             self._record("poll-timeout", [])
+            return
+        if isinstance(error, KafkaError) and not error.fatal():
+            self.transient_errors += 1
             return
         if error is not None:
             raise PortError(f"consumer error: {error}")
@@ -364,6 +456,59 @@ class RedpandaSource(EventSource):
         """Append a RebalanceEvent of kind for partitions to self.rebalances."""
         numbers = tuple(sorted(partition.partition for partition in partitions))
         self.rebalances.append(RebalanceEvent(self._wall_clock(), kind, numbers))
+
+
+class SnapshotConsumer(Protocol):
+    """The subset of confluent_kafka.Consumer used by read_topic."""
+
+    def get_watermark_offsets(self, partition: TopicPartition, timeout: float) -> tuple[int, int]:
+        """Return the low and high watermark offsets of partition."""
+        ...
+
+    def assign(self, partitions: list[TopicPartition]) -> None:
+        """Start consuming partitions at their given offsets."""
+        ...
+
+    def consume(self, num_messages: int, timeout: float) -> list[Message]:
+        """Return up to num_messages messages, waiting up to timeout seconds."""
+        ...
+
+
+SNAPSHOT_BATCH = 1_000
+
+
+def read_topic(
+    consumer: SnapshotConsumer, topic: str, partitions: int, timeout_s: float
+) -> list[Event]:
+    """Return every event of topic's partitions, up to their end offsets when called.
+
+    Events are sorted by partition, then offset.
+
+    Raises:
+        PortError: A consumer error, or the end offsets were not reached within timeout_s.
+        CodecError: A message is not a valid envelope.
+    """
+    ends = {
+        partition: consumer.get_watermark_offsets(TopicPartition(topic, partition), timeout_s)[1]
+        for partition in range(partitions)
+    }
+    consumer.assign(
+        [TopicPartition(topic, p, OFFSET_BEGINNING) for p, end in ends.items() if end > 0]
+    )
+    next_offset = dict.fromkeys(ends, 0)
+    events: list[Event] = []
+    deadline = time.monotonic() + timeout_s
+    while any(next_offset[p] < end for p, end in ends.items()):
+        if time.monotonic() > deadline:
+            raise PortError(f"read stopped at {next_offset}, end offsets {ends}")
+        for message in consumer.consume(SNAPSHOT_BATCH, POLL_INTERVAL_S):
+            if message.error() is not None:
+                raise PortError(f"consumer error: {message.error()}")
+            position = position_of(message)
+            if position.offset < ends[position.partition]:
+                events.append(decode(message.key(), message.value(), position))
+                next_offset[position.partition] = position.offset + 1
+    return sorted(events, key=lambda event: event.position)
 
 
 def _delivery_callback(

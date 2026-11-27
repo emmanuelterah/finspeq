@@ -161,11 +161,17 @@ def test_disorder_and_lateness_sweep_arguments() -> None:
 
 OFFLINE_ONLY = ("lightgbm", "onnxruntime", "onnxmltools", "sklearn")
 STREAMING_ONLY = ("confluent_kafka", "redis", "prometheus_client")
+TRAINING_ONLY = ("lightgbm", "onnxmltools", "sklearn")
+SERVING_ONLY = ("fastapi", "uvicorn")
 
 
 @pytest.mark.parametrize(
     ("root", "absent"),
-    [("finspeq.bootstrap.offline", STREAMING_ONLY), ("finspeq.bootstrap.streaming", OFFLINE_ONLY)],
+    [
+        ("finspeq.bootstrap.offline", STREAMING_ONLY + SERVING_ONLY),
+        ("finspeq.bootstrap.streaming", OFFLINE_ONLY + SERVING_ONLY),
+        ("finspeq.bootstrap.serving", TRAINING_ONLY),
+    ],
 )
 def test_composition_roots_load_only_their_libraries(root: str, absent: tuple[str, ...]) -> None:
     """Import each composition root alone and find none of the other process's libraries."""

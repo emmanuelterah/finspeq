@@ -1,4 +1,4 @@
-"""ONNX export of LightGBM models and ONNX Runtime inference (FraudModel, BatchScorer)."""
+"""ONNX export of LightGBM models and batch scoring of dataset splits with ONNX Runtime."""
 
 from __future__ import annotations
 
@@ -11,10 +11,17 @@ from pathlib import Path
 
 import lightgbm as lgb
 import numpy as np
-import onnxruntime as ort
 from onnxmltools import convert_lightgbm
 from onnxmltools.convert.common.data_types import FloatTensorType
 
+from finspeq.adapters.outbound.onnx_runtime import (
+    INPUT_NAME,
+    METADATA_FILE,
+    MODEL_FILE,
+    PROBABILITIES_OUTPUT,
+    OnnxFraudModel,
+    onnx_session,
+)
 from finspeq.adapters.outbound.training_data import load_split
 from finspeq.application.messages import (
     DatasetRef,
@@ -23,15 +30,11 @@ from finspeq.application.messages import (
     ScoredSplit,
     Split,
 )
-from finspeq.application.ports import BatchScorer, FraudModel, ModelExporter
-from finspeq.domain.errors import SchemaMismatchError
-from finspeq.domain.features import FeatureVector
-from finspeq.domain.policy import Score, Thresholds
+from finspeq.application.ports import BatchScorer, ModelExporter
+from finspeq.domain.policy import Thresholds
 
-MODEL_FILE = "model.onnx"
-METADATA_FILE = "metadata.json"
-INPUT_NAME = "features"
-PROBABILITIES_OUTPUT = "probabilities"
+__all__ = ["OnnxBatchScorer", "OnnxExporter", "OnnxFraudModel", "float32_exact_model"]
+
 VERSION_HEX_CHARS = 12
 BATCH_ROWS = 100_000
 LIBRARIES = ("lightgbm", "onnx", "onnxmltools", "onnxruntime")
@@ -72,50 +75,12 @@ class OnnxExporter(ModelExporter):
         return ModelRef(directory=target.as_posix(), version=version, schema=artifact.schema)
 
 
-class OnnxFraudModel(FraudModel):
-    """Single-vector fraud scoring with ONNX Runtime on one CPU thread."""
-
-    def __init__(self, directory: str) -> None:
-        """Load model.onnx and metadata.json from an exported model directory."""
-        metadata_path = Path(directory) / METADATA_FILE
-        self._metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        self._session = _session(Path(directory) / MODEL_FILE)
-
-    @property
-    def version(self) -> str:
-        """Return the exported model's version."""
-        return str(self._metadata["model_version"])
-
-    @property
-    def schema(self) -> str:
-        """Return the feature-set version the model was trained on."""
-        return str(self._metadata["feature_schema"])
-
-    @property
-    def thresholds(self) -> Thresholds:
-        """Return the REVIEW and BLOCK thresholds stored with the model."""
-        values = self._metadata["thresholds"]
-        return Thresholds(review=float(values["review"]), block=float(values["block"]))
-
-    def predict(self, vector: FeatureVector) -> Score:
-        """Return the fraud probability for vector, computed on float32 inputs.
-
-        Raises:
-            SchemaMismatchError: vector.schema differs from the model's schema.
-        """
-        if vector.schema != self.schema:
-            raise SchemaMismatchError(f"model expects {self.schema}, got {vector.schema}")
-        inputs = np.asarray([vector.values], dtype=np.float32)
-        probabilities = self._session.run([PROBABILITIES_OUTPUT], {INPUT_NAME: inputs})[0]
-        return Score(min(1.0, max(0.0, float(probabilities[0][1]))))
-
-
 class OnnxBatchScorer(BatchScorer):
     """Scores dataset splits with an exported ONNX model in batches."""
 
     def __init__(self, directory: str) -> None:
         """Load model.onnx from an exported model directory."""
-        self._session = _session(Path(directory) / MODEL_FILE)
+        self._session = onnx_session(Path(directory) / MODEL_FILE)
 
     def score(self, dataset: DatasetRef, split: Split) -> ScoredSplit:
         """Return the model's fraud probability and the label of every row of split."""
@@ -152,14 +117,6 @@ def _float32_floor(value: float) -> float:
     if float(rounded) > value:
         rounded = np.nextafter(rounded, np.float32(-np.inf))
     return float(rounded)
-
-
-def _session(path: Path) -> ort.InferenceSession:
-    """Return an ONNX Runtime CPU session for path with one intra-op and one inter-op thread."""
-    options = ort.SessionOptions()
-    options.intra_op_num_threads = 1
-    options.inter_op_num_threads = 1
-    return ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
 
 
 def _metadata(artifact: ModelArtifact, thresholds: Thresholds, version: str) -> dict[str, object]:

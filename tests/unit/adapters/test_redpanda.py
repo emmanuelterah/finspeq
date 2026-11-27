@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import cast
 
 import pytest
@@ -12,7 +15,13 @@ pytest.importorskip("confluent_kafka")
 from confluent_kafka import OFFSET_BEGINNING, KafkaError, Message, TopicPartition
 
 from finspeq.adapters.codec import encode
-from finspeq.adapters.outbound.redpanda import RedpandaPublisher, RedpandaSource, SourceOptions
+from finspeq.adapters.outbound.redpanda import (
+    ConcurrentPublisher,
+    RedpandaPublisher,
+    RedpandaSource,
+    SourceOptions,
+    read_topic,
+)
 from finspeq.application.errors import PortError, PublishFailedError
 from finspeq.application.messages import EventPosition
 from finspeq.domain.model import Transaction
@@ -265,3 +274,97 @@ def test_poll_timeout_is_recorded_not_raised() -> None:
     polled = source.poll(10)
     assert polled is not None and len(polled.events) == 1
     assert [(e.kind, e.partitions) for e in source.rebalances] == [("poll-timeout", ())]
+
+
+class PollingProducer:
+    """Producer that delivers queued messages when polled, optionally failing or never."""
+
+    def __init__(self, mode: str = "ok") -> None:
+        """Create a producer; mode is "ok", "fail" (error reports), or "silent" (no reports)."""
+        self._mode = mode
+        self._lock = threading.Lock()
+        self._queued: list[tuple[bytes, bytes, Callback]] = []
+        self._offset = 0
+
+    def produce(
+        self, topic: str, *, value: bytes, key: bytes, partition: int, on_delivery: Callback
+    ) -> None:
+        """Queue a message; check it is sent by key."""
+        assert (topic, partition) == (TOPIC, -1)
+        with self._lock:
+            self._queued.append((key, value, on_delivery))
+
+    def poll(self, timeout: float) -> int:
+        """Deliver every queued message according to the mode, then wait up to timeout."""
+        with self._lock:
+            queued, self._queued = self._queued, []
+        for key, value, callback in queued:
+            if self._mode == "silent":
+                continue
+            error = cast(KafkaError, "broker down") if self._mode == "fail" else None
+            callback(error, cast(Message, FakeMessage(0, self._offset, key, value)))
+            self._offset += 1
+        time.sleep(min(timeout, 0.001))
+        return len(queued)
+
+    def flush(self, timeout: float) -> int:
+        """Deliver what is queued and return 0."""
+        self.poll(0.0)
+        assert timeout > 0
+        return 0
+
+
+def test_concurrent_publisher_serves_many_threads() -> None:
+    """Return a distinct acknowledged position to each of many concurrent callers."""
+    publisher = ConcurrentPublisher(PollingProducer(), TOPIC, timeout_s=5.0)
+    publisher.start()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        positions = list(pool.map(publisher.publish_raw, [make_tx(n) for n in range(1, 41)]))
+    publisher.close()
+    assert sorted(p.offset for p in positions) == list(range(40))
+
+
+@pytest.mark.parametrize(("mode", "timeout_s"), [("fail", 5.0), ("silent", 0.05)])
+def test_concurrent_publisher_raises_without_an_ack(mode: str, timeout_s: float) -> None:
+    """Raise PublishFailedError on a delivery error or when no report arrives in time."""
+    publisher = ConcurrentPublisher(PollingProducer(mode), TOPIC, timeout_s=timeout_s)
+    publisher.start()
+    with pytest.raises(PublishFailedError):
+        publisher.publish_raw(make_tx(1))
+    publisher.close()
+
+
+class SnapshotFake(FakeConsumer):
+    """FakeConsumer that also reports watermark offsets."""
+
+    def __init__(self, messages: list[FakeMessage], ends: dict[int, int]) -> None:
+        """Create a consumer over messages whose partitions end at ends."""
+        super().__init__(messages)
+        self._ends = ends
+
+    def get_watermark_offsets(self, partition: TopicPartition, timeout: float) -> tuple[int, int]:
+        """Return (0, end) for partition; check the timeout is positive."""
+        assert timeout > 0
+        return 0, self._ends.get(partition.partition, 0)
+
+
+def test_read_topic_returns_events_up_to_the_end_offsets() -> None:
+    """Read both partitions to their end offsets and ignore messages written after."""
+    messages = [
+        message(1, 0, make_tx(1, card=OTHER_CARD)),
+        message(0, 0, make_tx(2)),
+        message(0, 1, make_tx(3)),
+        message(0, 2, make_tx(4)),
+    ]
+    events = read_topic(SnapshotFake(messages, {0: 2, 1: 1}), TOPIC, 2, timeout_s=1.0)
+    assert [(e.position.partition, e.position.offset) for e in events] == [(0, 0), (0, 1), (1, 0)]
+
+
+def test_transient_client_errors_are_counted_not_raised() -> None:
+    """Skip a non-fatal broker transport error and keep reading."""
+    lost = FakeMessage(0, 0, b"", b"", error=KafkaError(KafkaError._TRANSPORT))
+    consumer = FakeConsumer([lost, message(0, 0, make_tx(1))])
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, SourceOptions(0.0))
+    polled = source.poll(10)
+    assert polled is not None and len(polled.events) == 1
+    assert source.transient_errors == 1

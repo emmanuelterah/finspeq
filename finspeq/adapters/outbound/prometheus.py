@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Histogram,
+    generate_latest,
+    start_http_server,
+)
 
 from finspeq.application.ports import Metrics
 
@@ -29,6 +36,10 @@ class PrometheusMetrics(Metrics):
     def serve(self, port: int) -> None:
         """Expose the registry over HTTP at /metrics on port, from a background thread."""
         start_http_server(port, registry=self._registry)
+
+    def page(self) -> tuple[bytes, str]:
+        """Return the registry in the Prometheus text format and its content type."""
+        return generate_latest(self._registry), CONTENT_TYPE_LATEST
 
     def observe(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
         """Record value in the histogram `name`."""
