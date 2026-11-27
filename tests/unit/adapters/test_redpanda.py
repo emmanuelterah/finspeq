@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import cast
 
@@ -15,6 +15,7 @@ pytest.importorskip("confluent_kafka")
 from confluent_kafka import OFFSET_BEGINNING, KafkaError, Message, TopicPartition
 
 from finspeq.adapters.codec import encode
+from finspeq.adapters.outbound.null_metrics import NullMetrics
 from finspeq.adapters.outbound.redpanda import (
     ConcurrentPublisher,
     RedpandaPublisher,
@@ -113,6 +114,7 @@ class FakeConsumer:
         self.added: list[TopicPartition] = []
         self.commits: list[TopicPartition] = []
         self.seeks: list[TopicPartition] = []
+        self.highs: dict[int, int] = {}
         self.asynchronous: list[bool] = []
         self.on_assign: Callable[[object, list[TopicPartition]], None] | None = None
         self.on_revoke: Callable[[object, list[TopicPartition]], None] | None = None
@@ -147,6 +149,13 @@ class FakeConsumer:
     def seek(self, partition: TopicPartition) -> None:
         """Record the seek."""
         self.seeks.append(partition)
+
+    def get_watermark_offsets(
+        self, partition: TopicPartition, timeout: float = -1.0, cached: bool = False
+    ) -> tuple[int, int]:
+        """Return (0, high) from self.highs, or -1 for an unknown partition; require cached."""
+        assert cached and timeout < 0
+        return 0, self.highs.get(partition.partition, -1)
 
     def commit(self, *, offsets: list[TopicPartition], asynchronous: bool) -> None:
         """Record the committed offsets and whether the commit was asynchronous."""
@@ -342,9 +351,11 @@ class SnapshotFake(FakeConsumer):
         super().__init__(messages)
         self._ends = ends
 
-    def get_watermark_offsets(self, partition: TopicPartition, timeout: float) -> tuple[int, int]:
-        """Return (0, end) for partition; check the timeout is positive."""
-        assert timeout > 0
+    def get_watermark_offsets(
+        self, partition: TopicPartition, timeout: float = -1.0, cached: bool = False
+    ) -> tuple[int, int]:
+        """Return (0, end) for partition; check the broker is asked with a positive timeout."""
+        assert timeout > 0 and not cached
         return 0, self._ends.get(partition.partition, 0)
 
 
@@ -368,3 +379,27 @@ def test_transient_client_errors_are_counted_not_raised() -> None:
     polled = source.poll(10)
     assert polled is not None and len(polled.events) == 1
     assert source.transient_errors == 1
+
+
+class GaugeMetrics(NullMetrics):
+    """Metrics that keep the last value of each gauge by name and labels."""
+
+    def __init__(self) -> None:
+        """Create an empty gauge table."""
+        self.gauges: dict[tuple[str, str], float] = {}
+
+    def set_gauge(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Store value under name and the partition label."""
+        self.gauges[(name, (labels or {}).get("partition", ""))] = value
+
+
+def test_poll_reports_lag_per_consumed_partition() -> None:
+    """Set fq_consumer_lag to the high offset minus the next offset, skipping unknown highs."""
+    consumer = FakeConsumer(
+        [message(0, 9, make_tx(1)), message(0, 10, make_tx(2)), message(1, 3, make_tx(3))]
+    )
+    consumer.highs = {0: 15}
+    metrics = GaugeMetrics()
+    source = RedpandaSource(consumer, TOPIC, lambda _: None, SourceOptions(0.0, metrics=metrics))
+    source.poll(10)
+    assert metrics.gauges == {("fq_consumer_lag", "0"): 4}

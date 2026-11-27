@@ -29,6 +29,9 @@ class RecordingMetrics:
         assert labels == {"partition": "0"}
         self.counters[name] = self.counters.get(name, 0.0) + amount
 
+    def set_gauge(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Ignore gauges."""
+
 
 class TickClock:
     """Clock that advances 2 ms per call."""

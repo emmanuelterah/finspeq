@@ -8,6 +8,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
     start_http_server,
@@ -21,7 +22,7 @@ SECONDS_SUFFIX = "_s"
 
 
 class PrometheusMetrics(Metrics):
-    """Histograms and counters in a private Prometheus registry, created on first use.
+    """Histograms, counters and gauges in a private Prometheus registry, created on first use.
 
     A metric's label names are fixed by its first call. Histograms whose name ends in "_s" use
     SECONDS_BUCKETS; the others use LATENCY_BUCKETS_MS.
@@ -32,6 +33,7 @@ class PrometheusMetrics(Metrics):
         self._registry = CollectorRegistry()
         self._histograms: dict[str, Histogram] = {}
         self._counters: dict[str, Counter] = {}
+        self._gauges: dict[str, Gauge] = {}
 
     def serve(self, port: int) -> None:
         """Expose the registry over HTTP at /metrics on port, from a background thread."""
@@ -63,3 +65,12 @@ class PrometheusMetrics(Metrics):
             counter = Counter(name, name, sorted(labels), registry=self._registry)
             self._counters[name] = counter
         (counter.labels(**labels) if labels else counter).inc(amount)
+
+    def set_gauge(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Set the gauge `name` to value."""
+        labels = labels or {}
+        gauge = self._gauges.get(name)
+        if gauge is None:
+            gauge = Gauge(name, name, sorted(labels), registry=self._registry)
+            self._gauges[name] = gauge
+        (gauge.labels(**labels) if labels else gauge).set(value)

@@ -160,7 +160,10 @@ def _run_consumer(
     )
     cooperative = command.assignment_strategy == COOPERATIVE_STRATEGY
     source = RedpandaSource(
-        Consumer(config), command.topic, store.position, SourceOptions(POLL_TIMEOUT_S, cooperative)
+        Consumer(config),
+        command.topic,
+        store.position,
+        SourceOptions(POLL_TIMEOUT_S, cooperative, metrics=metrics),
     )
     source.start()
     clock = SystemClock()

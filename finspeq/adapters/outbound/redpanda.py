@@ -15,7 +15,7 @@ from confluent_kafka import OFFSET_BEGINNING, KafkaError, Message, TopicPartitio
 from finspeq.adapters.codec import decode, encode
 from finspeq.application.errors import PortError, PublishFailedError
 from finspeq.application.messages import Event, EventBatch, EventPosition
-from finspeq.application.ports import BulkPublisher, EventPublisher, EventSource
+from finspeq.application.ports import BulkPublisher, EventPublisher, EventSource, Metrics
 from finspeq.domain.model import Transaction
 from finspeq.domain.scored import ScoredTransaction
 
@@ -136,6 +136,12 @@ class ConsumerLike(Protocol):
 
     def seek(self, partition: TopicPartition) -> None:
         """Move the read position of an assigned partition."""
+        ...
+
+    def get_watermark_offsets(
+        self, partition: TopicPartition, timeout: float = -1.0, cached: bool = False
+    ) -> tuple[int, int]:
+        """Return the low and high offsets of partition; cached=True uses the last fetch."""
         ...
 
     def commit(self, *, offsets: list[TopicPartition], asynchronous: Literal[True]) -> None:
@@ -323,11 +329,13 @@ class SourceOptions:
         cooperative: True when the consumer uses the cooperative-sticky strategy, whose
             callbacks receive only the partitions that change.
         wall_clock: Timestamps rebalance events, in seconds since the epoch.
+        metrics: Receives the gauge fq_consumer_lag{partition} after each consume, or None.
     """
 
     poll_timeout_s: float
     cooperative: bool = False
     wall_clock: Callable[[], float] = time.time
+    metrics: Metrics | None = None
 
 
 class RedpandaSource(EventSource):
@@ -354,6 +362,7 @@ class RedpandaSource(EventSource):
         self._poll_timeout_s = options.poll_timeout_s
         self._cooperative = options.cooperative
         self._wall_clock = options.wall_clock
+        self._metrics = options.metrics
         self._buffers: dict[int, list[Event]] = {}
         self.rebalances: list[RebalanceEvent] = []
         self.transient_errors = 0
@@ -375,8 +384,12 @@ class RedpandaSource(EventSource):
             PortError: The consumer reported an error.
         """
         if not any(self._buffers.values()):
+            consumed: dict[int, int] = {}
             for message in self._consumer.consume(max_events, self._poll_timeout_s):
-                self._buffer(message)
+                position = self._buffer(message)
+                if position is not None:
+                    consumed[position.partition] = position.offset
+            self._report_lag(consumed)
         for partition in sorted(self._buffers):
             events = self._buffers[partition]
             if events:
@@ -400,13 +413,29 @@ class RedpandaSource(EventSource):
         """Leave the consumer group."""
         self._consumer.close()
 
-    def _buffer(self, message: Message) -> None:
-        """Decode message and append it to its partition's buffer.
+    def _report_lag(self, consumed: dict[int, int]) -> None:
+        """Set fq_consumer_lag{partition} for each partition in consumed.
+
+        consumed maps a partition to the offset of its last consumed message. The lag is the
+        number of messages in the log after it, from the high offset of the last fetch; a
+        partition whose high offset is not known yet is skipped.
+        """
+        if self._metrics is None:
+            return
+        for partition, offset in consumed.items():
+            topic_partition = TopicPartition(self._topic, partition)
+            _, high = self._consumer.get_watermark_offsets(topic_partition, cached=True)
+            if high >= 0:
+                lag = max(0, high - offset - 1)
+                self._metrics.set_gauge("fq_consumer_lag", lag, {"partition": str(partition)})
+
+    def _buffer(self, message: Message) -> EventPosition | None:
+        """Decode message, append it to its partition's buffer, and return its position.
 
         A maximum-poll-interval error is recorded as a "poll-timeout" rebalance event and
         skipped: the consumer rejoins the group on its next poll. Other non-fatal client errors
         (for example a broker connection lost) are counted in transient_errors and skipped,
-        because the client reconnects by itself.
+        because the client reconnects by itself. Skipped messages return None.
 
         Raises:
             PortError: message carries a fatal error or an error that is not a KafkaError.
@@ -414,15 +443,16 @@ class RedpandaSource(EventSource):
         error = message.error()
         if isinstance(error, KafkaError) and error.code() == KafkaError._MAX_POLL_EXCEEDED:
             self._record("poll-timeout", [])
-            return
+            return None
         if isinstance(error, KafkaError) and not error.fatal():
             self.transient_errors += 1
-            return
+            return None
         if error is not None:
             raise PortError(f"consumer error: {error}")
         position = position_of(message)
         event = decode(message.key(), message.value(), position)
         self._buffers.setdefault(position.partition, []).append(event)
+        return position
 
     def _on_assign(self, _consumer: object, partitions: list[TopicPartition]) -> None:
         """Start each assigned partition after its stored position, or at the beginning.

@@ -68,6 +68,9 @@ class RecordingMetrics:
         key = f"{name}:{(labels or {}).get('decision', '')}"
         self.counters[key] = self.counters.get(key, 0.0) + amount
 
+    def set_gauge(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Ignore gauges."""
+
 
 class TickClock:
     """Clock that advances 1 ms per call."""

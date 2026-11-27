@@ -255,6 +255,10 @@ class Metrics(Protocol):
         """Add amount to the counter `name`. Never raises."""
         ...
 
+    def set_gauge(self, name: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        """Set the gauge `name` to value. Never raises."""
+        ...
+
 
 class Clock(Protocol):
     """Source of monotonic time for latency measurement only; never used for features."""
