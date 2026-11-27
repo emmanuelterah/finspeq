@@ -25,6 +25,10 @@ vectors means the serving path computed different features.
 - The skew check needs the offline features of the same events, which exist here because the
   pipeline is deterministic and replayable; a system without replay could not separate drift
   from skew this way.
+- Compared with Evidently 0.7 on the same samples (`notes/m6.md`, section 9), the two PSIs
+  agree on count features and the hour, but Evidently's equal-width bins miss the holiday shift
+  in `spend_24h` (PSI 0.016 vs 0.26), and its default Wasserstein test alerts on 74 of 198
+  feature-months. Reference deciles are kept.
 - Recall needs labels, and labels arrive 7–60 days late: on any day only 15–19% of the last 30
   days' frauds are labelled (section 4). Drift is the early signal; recall confirms it weeks
   later.

@@ -123,6 +123,7 @@ finspeq-serve --model-dir models/<live> --shadow-model-dir models/<candidate> --
 finspeq-stream shadow-report                         # live vs shadow decisions, with labels
 finspeq-stream drift-ledger                          # daily PSI of the recorded vectors
 docker compose --profile observability up -d         # Prometheus :9090, Grafana :3000
+python scripts/compare_evidently.py --output notes/m6/evidently_compare.json  # needs .[evidently]
 ```
 
 </details>
@@ -136,6 +137,7 @@ bash scripts/m3_drills.sh    # delayed and duplicated events, lateness sweep
 bash scripts/m4_drills.sh    # partitions, workers, rebalances, zombie, live load
 bash scripts/m5_drills.sh    # latency, the race, broker down, ledger under crashes
 bash scripts/m6_drills.sh    # drift, delayed labels, shadow, Kafka transactions, Grafana
+bash scripts/m6_lag_check.sh # consumer-lag gauge vs an independent lag measurement
 ```
 
 Reports land in `notes/m2/` to `notes/m6/`.

@@ -623,6 +623,13 @@ stability index (PSI) compares how a month's (or a day's) values spread over tho
 how the training data did; above 0.2 is an alert. About 60 lines of plain Python, no monitoring
 library ([ADR-017](adr/017-drift-checked-against-offline-vectors.md)).
 
+Compared with Evidently on the same samples, the two PSIs agree on the count features and the
+hour. On skewed money features they do not: Evidently cuts a column into equal-width buckets,
+so nearly every 24 h spend value lands in the first one and the holiday rise disappears (PSI
+0.016 against 0.26). Evidently's default test, a Wasserstein distance, alerts on 74 of 198
+feature-months, too often to act on. The project's PSI also runs in 0.02 s a month against
+2.8 s.
+
 | Data | What alerted |
 |---|---|
 | Monthly dataset parts, Jan 2025 – Jun 2026 | `hour_of_day_utc` in 15 of 18 months; the 24 h counts in December to February |
@@ -704,13 +711,16 @@ include, so they keep their positions in the store they write
 
 ### The envelope and the dashboard
 
-msgspec decodes the event envelope about 10 times faster than the standard-library codec (3.8
-vs 37.6 µs), but decoding is 0.04 ms of a request that spends 5–9 ms reading Redis and
-publishing, and MessagePack saves only 6% of the bytes. The envelope stays JSON
-([ADR-016](adr/016-envelope-stays-json.md)). `docker compose --profile observability up -d`
-starts Prometheus, which scrapes the API and the worker, and Grafana with a provisioned 9-panel
-dashboard: decisions per second, per-step latency, window size, apply rate and latency, late and
-out-of-order events, and shadow decisions. Full results: [notes/m6.md](../notes/m6.md).
+msgspec decodes the event envelope about 10 times faster than the standard-library codec (3.8 vs
+37.6 µs), but decoding is 0.04 ms of a request that spends 5–9 ms reading Redis and publishing, and
+MessagePack saves only 6% of the bytes. The envelope stays JSON
+([ADR-016](adr/016-envelope-stays-json.md)). `docker compose --profile observability up -d` starts
+Prometheus, which scrapes the API and the worker, and Grafana with a provisioned 10-panel dashboard:
+decisions per second, per-step latency, window size, apply rate and latency, late and out-of-order
+events, shadow decisions, and the feature worker's consumer lag per partition. Checked against an
+independent measurement while a 120,000-event backlog built and drained, the lag panel stayed within
+one 500-event batch at the median and up to 13% low while the producer was still writing. Full
+results: [notes/m6.md](../notes/m6.md).
 
 ## 12. Engineering standards
 
@@ -776,7 +786,6 @@ All milestones are done; the main lessons are about where guarantees really come
 ### What is left
 
 - A clean latency run of the shadow model on a machine that is not also running the load.
-- A consumer-lag metric for the dashboard (lag is measured by a script today).
 - Retraining with the measured staleness, if real traffic ever shows a same-card rate near the
   replay's.
 

@@ -1,0 +1,1212 @@
+{
+  "reference_rows": 200006,
+  "psi_alert": 0.2,
+  "wasserstein_alert": 0.1,
+  "alerts": {
+    "amount_dollars": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 4,
+      "psi_disagree": []
+    },
+    "tx_count_1h": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 6,
+      "psi_disagree": []
+    },
+    "tx_count_24h": {
+      "project_psi": 5,
+      "evidently_psi": 5,
+      "wasserstein": 15,
+      "psi_disagree": []
+    },
+    "spend_1h": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 0,
+      "psi_disagree": []
+    },
+    "spend_24h": {
+      "project_psi": 2,
+      "evidently_psi": 0,
+      "wasserstein": 12,
+      "psi_disagree": [
+        "2026-01",
+        "2026-02"
+      ]
+    },
+    "amount_to_mean_24h": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 0,
+      "psi_disagree": []
+    },
+    "amount_to_max_24h": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 0,
+      "psi_disagree": []
+    },
+    "secs_since_last": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 5,
+      "psi_disagree": []
+    },
+    "distinct_merchants_24h": {
+      "project_psi": 5,
+      "evidently_psi": 5,
+      "wasserstein": 14,
+      "psi_disagree": []
+    },
+    "hour_of_day_utc": {
+      "project_psi": 15,
+      "evidently_psi": 15,
+      "wasserstein": 18,
+      "psi_disagree": []
+    },
+    "home_merchant_km": {
+      "project_psi": 0,
+      "evidently_psi": 0,
+      "wasserstein": 0,
+      "psi_disagree": []
+    }
+  },
+  "months": [
+    {
+      "month": "2025-01",
+      "rows": 100104,
+      "project_s": 0.022441499999331427,
+      "evidently_s": 3.271483900000021,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.1402452898925292,
+          "evidently_psi": 0.0022766612328707857,
+          "evidently_wasserstein": 0.10296642410162346
+        },
+        "tx_count_1h": {
+          "project_psi": 0.03991361270019527,
+          "evidently_psi": 0.0512794166507895,
+          "evidently_wasserstein": 0.19843546874444454
+        },
+        "tx_count_24h": {
+          "project_psi": 0.3496318290805261,
+          "evidently_psi": 0.4367050393951435,
+          "evidently_wasserstein": 0.4817894341777668
+        },
+        "spend_1h": {
+          "project_psi": 0.00862533585005551,
+          "evidently_psi": 0.0007556506580392168,
+          "evidently_wasserstein": 0.03798305465741906
+        },
+        "spend_24h": {
+          "project_psi": 0.08727688627466618,
+          "evidently_psi": 0.025250476178061355,
+          "evidently_wasserstein": 0.18320251460643505
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.11826296154293449,
+          "evidently_psi": 0.00028110524724607715,
+          "evidently_wasserstein": 0.023609977148181038
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.15436433287657023,
+          "evidently_psi": 0.0002297143190872757,
+          "evidently_wasserstein": 0.01876755089938999
+        },
+        "secs_since_last": {
+          "project_psi": 0.09863038692578197,
+          "evidently_psi": 0.10337195035409602,
+          "evidently_wasserstein": 0.29994968719282444
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.33558759785276693,
+          "evidently_psi": 0.43232277303884686,
+          "evidently_wasserstein": 0.486611057192314
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.3508531091322338,
+          "evidently_psi": 2.852181957357961,
+          "evidently_wasserstein": 0.5635673553546978
+        },
+        "home_merchant_km": {
+          "project_psi": 0.00017497249395554058,
+          "evidently_psi": 0.00029159154017458763,
+          "evidently_wasserstein": 0.008142600995523028
+        }
+      }
+    },
+    {
+      "month": "2025-02",
+      "rows": 100466,
+      "project_s": 0.016187600000193925,
+      "evidently_s": 2.8374982999994245,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.1422927618997412,
+          "evidently_psi": 0.0027919763005722683,
+          "evidently_wasserstein": 0.10676279342639493
+        },
+        "tx_count_1h": {
+          "project_psi": 0.039836631767254424,
+          "evidently_psi": 0.04956709545214785,
+          "evidently_wasserstein": 0.19629029079835894
+        },
+        "tx_count_24h": {
+          "project_psi": 0.3188023097021278,
+          "evidently_psi": 0.4119167322600103,
+          "evidently_wasserstein": 0.463770402966736
+        },
+        "spend_1h": {
+          "project_psi": 0.00814177848884294,
+          "evidently_psi": 0.0006194296327164176,
+          "evidently_wasserstein": 0.036296165497851744
+        },
+        "spend_24h": {
+          "project_psi": 0.07349714242705782,
+          "evidently_psi": 0.019648947489919633,
+          "evidently_wasserstein": 0.16588729566178892
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.11237117602707494,
+          "evidently_psi": 0.0006342599377726346,
+          "evidently_wasserstein": 0.023619957852970948
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.14923532868333325,
+          "evidently_psi": 0.0006823183768368036,
+          "evidently_wasserstein": 0.022350185487820473
+        },
+        "secs_since_last": {
+          "project_psi": 0.09241525009949247,
+          "evidently_psi": 0.09614363254246922,
+          "evidently_wasserstein": 0.28612975198966795
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.3056830020341998,
+          "evidently_psi": 0.3779879353033388,
+          "evidently_wasserstein": 0.46818311807730933
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.3684225784469874,
+          "evidently_psi": 2.8549567086274816,
+          "evidently_wasserstein": 0.5679276360493903
+        },
+        "home_merchant_km": {
+          "project_psi": 9.661451348400272e-05,
+          "evidently_psi": 0.00031887940445506335,
+          "evidently_wasserstein": 0.00378526383621113
+        }
+      }
+    },
+    {
+      "month": "2025-03",
+      "rows": 99610,
+      "project_s": 0.01816690000032395,
+      "evidently_s": 2.7547218000008797,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.14349010472412005,
+          "evidently_psi": 0.0034552967316580398,
+          "evidently_wasserstein": 0.11138253006880837
+        },
+        "tx_count_1h": {
+          "project_psi": 0.005153170153977138,
+          "evidently_psi": 0.00779019031569689,
+          "evidently_wasserstein": 0.08192994730829219
+        },
+        "tx_count_24h": {
+          "project_psi": 0.03924299257612829,
+          "evidently_psi": 0.06466551829566551,
+          "evidently_wasserstein": 0.18553342208259396
+        },
+        "spend_1h": {
+          "project_psi": 0.0008692403534418178,
+          "evidently_psi": 0.00092816631731388,
+          "evidently_wasserstein": 0.028333922573395807
+        },
+        "spend_24h": {
+          "project_psi": 0.011566741792084929,
+          "evidently_psi": 0.005306733791963217,
+          "evidently_wasserstein": 0.05305595430245912
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.09441640231187078,
+          "evidently_psi": 0.0011911949205101451,
+          "evidently_wasserstein": 0.04303001923393984
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.11879980897891178,
+          "evidently_psi": 0.0012255059749837127,
+          "evidently_wasserstein": 0.02832068611539674
+        },
+        "secs_since_last": {
+          "project_psi": 0.008166260760598535,
+          "evidently_psi": 0.008071213013353019,
+          "evidently_wasserstein": 0.07286001686383725
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.03667056501704897,
+          "evidently_psi": 0.06033827090207407,
+          "evidently_wasserstein": 0.1815056959211698
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.3954674181121742,
+          "evidently_psi": 2.840211986390333,
+          "evidently_wasserstein": 0.5762170290383496
+        },
+        "home_merchant_km": {
+          "project_psi": 0.0001606462727157042,
+          "evidently_psi": 0.00030750237088700744,
+          "evidently_wasserstein": 0.006061915210953245
+        }
+      }
+    },
+    {
+      "month": "2025-04",
+      "rows": 100205,
+      "project_s": 0.01901799999996001,
+      "evidently_s": 2.634642299999541,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.1407246674960662,
+          "evidently_psi": 0.0034448062487176644,
+          "evidently_wasserstein": 0.11369458230335525
+        },
+        "tx_count_1h": {
+          "project_psi": 0.008189222244571095,
+          "evidently_psi": 0.01267378304342859,
+          "evidently_wasserstein": 0.10259438164484089
+        },
+        "tx_count_24h": {
+          "project_psi": 0.056898200702735685,
+          "evidently_psi": 0.0931607018890116,
+          "evidently_wasserstein": 0.22410967036378612
+        },
+        "spend_1h": {
+          "project_psi": 0.00022871592259596988,
+          "evidently_psi": 0.001545862337948155,
+          "evidently_wasserstein": 0.027989530088014816
+        },
+        "spend_24h": {
+          "project_psi": 0.010256407159755182,
+          "evidently_psi": 0.007160898889170674,
+          "evidently_wasserstein": 0.04557736936678181
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.09468257799274385,
+          "evidently_psi": 0.0008679809746411909,
+          "evidently_wasserstein": 0.04032959700956962
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.11970056841868425,
+          "evidently_psi": 0.0005739084923215496,
+          "evidently_wasserstein": 0.02529776205090074
+        },
+        "secs_since_last": {
+          "project_psi": 0.01292055662157283,
+          "evidently_psi": 0.013471696037230032,
+          "evidently_wasserstein": 0.09678228137654181
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.05389991306089181,
+          "evidently_psi": 0.08258058828271968,
+          "evidently_wasserstein": 0.22151770042955446
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.9232175638672824,
+          "evidently_psi": 2.9372300955100545,
+          "evidently_wasserstein": 0.48934072062467115
+        },
+        "home_merchant_km": {
+          "project_psi": 5.418361614413896e-05,
+          "evidently_psi": 0.00030686317952437073,
+          "evidently_wasserstein": 0.003506102072747391
+        }
+      }
+    },
+    {
+      "month": "2025-05",
+      "rows": 99939,
+      "project_s": 0.018838599999980943,
+      "evidently_s": 2.650248300000385,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.0686269252689313,
+          "evidently_psi": 0.0011319929255450946,
+          "evidently_wasserstein": 0.0898487696228052
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0010757430511368783,
+          "evidently_psi": 0.0023096647372445496,
+          "evidently_wasserstein": 0.04257058377325691
+        },
+        "tx_count_24h": {
+          "project_psi": 0.016846484909375774,
+          "evidently_psi": 0.04186364844030913,
+          "evidently_wasserstein": 0.1226909443929492
+        },
+        "spend_1h": {
+          "project_psi": 0.0011184504753100634,
+          "evidently_psi": 0.001035802300418837,
+          "evidently_wasserstein": 0.02444969115506765
+        },
+        "spend_24h": {
+          "project_psi": 0.007445650862856195,
+          "evidently_psi": 0.0038977988045469083,
+          "evidently_wasserstein": 0.052059726539845357
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.034686672668785556,
+          "evidently_psi": 0.0006840776146342409,
+          "evidently_wasserstein": 0.027874979823178436
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.04647926571258823,
+          "evidently_psi": 0.0004080578050566909,
+          "evidently_wasserstein": 0.01756838929822949
+        },
+        "secs_since_last": {
+          "project_psi": 0.0017450649688689904,
+          "evidently_psi": 0.0017177780213082307,
+          "evidently_wasserstein": 0.02934348193170926
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.01505423331497388,
+          "evidently_psi": 0.037849298960228726,
+          "evidently_wasserstein": 0.11701361472375474
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.7864389875260662,
+          "evidently_psi": 0.7856769896724518,
+          "evidently_wasserstein": 0.3889294354105222
+        },
+        "home_merchant_km": {
+          "project_psi": 0.00010155097103665424,
+          "evidently_psi": 0.00045028234847406437,
+          "evidently_wasserstein": 0.008732900407006914
+        }
+      }
+    },
+    {
+      "month": "2025-06",
+      "rows": 100446,
+      "project_s": 0.019455999999991036,
+      "evidently_s": 2.575098000000253,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.022951234307008763,
+          "evidently_psi": 0.0013097308803121672,
+          "evidently_wasserstein": 0.056056376817994635
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0006514042188627472,
+          "evidently_psi": 0.001089656303653637,
+          "evidently_wasserstein": 0.020991683253733646
+        },
+        "tx_count_24h": {
+          "project_psi": 0.011155151397575436,
+          "evidently_psi": 0.018014990875974718,
+          "evidently_wasserstein": 0.0845616371614581
+        },
+        "spend_1h": {
+          "project_psi": 0.0032294176219287607,
+          "evidently_psi": 0.000653534458030052,
+          "evidently_wasserstein": 0.03617209502728693
+        },
+        "spend_24h": {
+          "project_psi": 0.024022224433068,
+          "evidently_psi": 0.008100631359855247,
+          "evidently_wasserstein": 0.1084652764989682
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.01399986180950917,
+          "evidently_psi": 0.0006337711806862029,
+          "evidently_wasserstein": 0.02278538743026964
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.018186813298902003,
+          "evidently_psi": 0.0005228672733948634,
+          "evidently_wasserstein": 0.019000758205831695
+        },
+        "secs_since_last": {
+          "project_psi": 0.005242963546138728,
+          "evidently_psi": 0.005210001778496386,
+          "evidently_wasserstein": 0.06203385441830405
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.010618905738112248,
+          "evidently_psi": 0.016955475162669785,
+          "evidently_wasserstein": 0.08456571515676486
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.27454238858931396,
+          "evidently_psi": 0.2742821822844199,
+          "evidently_wasserstein": 0.2634030751696407
+        },
+        "home_merchant_km": {
+          "project_psi": 0.0001196885394696104,
+          "evidently_psi": 0.00017329911054866657,
+          "evidently_wasserstein": 0.005734580140135391
+        }
+      }
+    },
+    {
+      "month": "2025-07",
+      "rows": 99939,
+      "project_s": 0.02243799999996554,
+      "evidently_s": 2.8108077999995658,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.051729719722193486,
+          "evidently_psi": 0.0013211816025392115,
+          "evidently_wasserstein": 0.0790653034652266
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0002519759880669113,
+          "evidently_psi": 0.0005270775254430694,
+          "evidently_wasserstein": 0.01518936355237771
+        },
+        "tx_count_24h": {
+          "project_psi": 0.009233090300347508,
+          "evidently_psi": 0.019158178518788364,
+          "evidently_wasserstein": 0.06996715492556146
+        },
+        "spend_1h": {
+          "project_psi": 0.0019844234557429216,
+          "evidently_psi": 0.0004957631119479917,
+          "evidently_wasserstein": 0.02330749107913323
+        },
+        "spend_24h": {
+          "project_psi": 0.008981034184885403,
+          "evidently_psi": 0.003203730802406817,
+          "evidently_wasserstein": 0.04614389834757228
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.036358958058520914,
+          "evidently_psi": 0.0005944480490982491,
+          "evidently_wasserstein": 0.03551178145845314
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.04094750163461921,
+          "evidently_psi": 0.0004720661919429935,
+          "evidently_wasserstein": 0.02407500547277509
+        },
+        "secs_since_last": {
+          "project_psi": 0.003519579141773075,
+          "evidently_psi": 0.0039119120500607585,
+          "evidently_wasserstein": 0.045871361430169
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.008519662046870992,
+          "evidently_psi": 0.016809774404753317,
+          "evidently_wasserstein": 0.06933095578103186
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.16472786209468132,
+          "evidently_psi": 0.1654642650006804,
+          "evidently_wasserstein": 0.2158141541310746
+        },
+        "home_merchant_km": {
+          "project_psi": 2.725452722715013e-05,
+          "evidently_psi": 0.00026796017626251666,
+          "evidently_wasserstein": 0.0038626562872259443
+        }
+      }
+    },
+    {
+      "month": "2025-08",
+      "rows": 99592,
+      "project_s": 0.020428299999366573,
+      "evidently_s": 2.63840159999927,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.05235048179224746,
+          "evidently_psi": 0.001076265162045403,
+          "evidently_wasserstein": 0.073870314969341
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0021952531463025663,
+          "evidently_psi": 0.003024261086139847,
+          "evidently_wasserstein": 0.04258989462340453
+        },
+        "tx_count_24h": {
+          "project_psi": 0.019992353908753185,
+          "evidently_psi": 0.028049136201753037,
+          "evidently_wasserstein": 0.10977030481686685
+        },
+        "spend_1h": {
+          "project_psi": 0.00034036008221454154,
+          "evidently_psi": 0.0005887757819472152,
+          "evidently_wasserstein": 0.013515632137787543
+        },
+        "spend_24h": {
+          "project_psi": 0.007380530900341275,
+          "evidently_psi": 0.0007688996561807902,
+          "evidently_wasserstein": 0.025042916980154987
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.03811635349349294,
+          "evidently_psi": 0.0009731356582446699,
+          "evidently_wasserstein": 0.03628801012303358
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.043632313638358095,
+          "evidently_psi": 0.0007172689058750356,
+          "evidently_wasserstein": 0.02358418932508237
+        },
+        "secs_since_last": {
+          "project_psi": 0.010195721883657102,
+          "evidently_psi": 0.010995633534031553,
+          "evidently_wasserstein": 0.08513273285854979
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.019501078286138084,
+          "evidently_psi": 0.028045000923419917,
+          "evidently_wasserstein": 0.11053324774286512
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.16733250700435318,
+          "evidently_psi": 0.16794595625988856,
+          "evidently_wasserstein": 0.21124283110440797
+        },
+        "home_merchant_km": {
+          "project_psi": 9.595621439278606e-05,
+          "evidently_psi": 0.0003287476989509714,
+          "evidently_wasserstein": 0.003674105836393035
+        }
+      }
+    },
+    {
+      "month": "2025-09",
+      "rows": 99449,
+      "project_s": 0.02053630000045814,
+      "evidently_s": 2.949595000000045,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.04757030298753051,
+          "evidently_psi": 0.002029223203900852,
+          "evidently_wasserstein": 0.07844413897346222
+        },
+        "tx_count_1h": {
+          "project_psi": 0.007171348786642655,
+          "evidently_psi": 0.010923406951765169,
+          "evidently_wasserstein": 0.09508656531068538
+        },
+        "tx_count_24h": {
+          "project_psi": 0.050174906752881845,
+          "evidently_psi": 0.08436615617121847,
+          "evidently_wasserstein": 0.21203480074123274
+        },
+        "spend_1h": {
+          "project_psi": 0.01637343716044537,
+          "evidently_psi": 0.0006483957169668168,
+          "evidently_wasserstein": 0.04952089030668536
+        },
+        "spend_24h": {
+          "project_psi": 0.06474480505214797,
+          "evidently_psi": 0.008868939898974637,
+          "evidently_wasserstein": 0.14898412912666753
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.039551258475358134,
+          "evidently_psi": 0.0004357136997516873,
+          "evidently_wasserstein": 0.06110607784258119
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.03865338041701199,
+          "evidently_psi": 0.0005779122701101639,
+          "evidently_wasserstein": 0.054850891109719524
+        },
+        "secs_since_last": {
+          "project_psi": 0.0115483472223111,
+          "evidently_psi": 0.012215205724810859,
+          "evidently_wasserstein": 0.09099607688021968
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.04683003272583136,
+          "evidently_psi": 0.08309878406256223,
+          "evidently_wasserstein": 0.2085155646545956
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.1868869638418066,
+          "evidently_psi": 0.18740301989577043,
+          "evidently_wasserstein": 0.22632288066320685
+        },
+        "home_merchant_km": {
+          "project_psi": 6.975392706796273e-05,
+          "evidently_psi": 0.00021324035028099611,
+          "evidently_wasserstein": 0.005479569334174512
+        }
+      }
+    },
+    {
+      "month": "2025-10",
+      "rows": 100452,
+      "project_s": 0.02184399999987363,
+      "evidently_s": 2.766549099999793,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.048071188996874355,
+          "evidently_psi": 0.0012796324074771405,
+          "evidently_wasserstein": 0.07892933653507178
+        },
+        "tx_count_1h": {
+          "project_psi": 0.007670552561450796,
+          "evidently_psi": 0.011265548483396328,
+          "evidently_wasserstein": 0.09758876605703751
+        },
+        "tx_count_24h": {
+          "project_psi": 0.06153634989649301,
+          "evidently_psi": 0.09164708213301084,
+          "evidently_wasserstein": 0.22774486140222686
+        },
+        "spend_1h": {
+          "project_psi": 0.016118834709038223,
+          "evidently_psi": 0.0005296435045129732,
+          "evidently_wasserstein": 0.05050581231013747
+        },
+        "spend_24h": {
+          "project_psi": 0.07616815791255532,
+          "evidently_psi": 0.011074243044135524,
+          "evidently_wasserstein": 0.16080148949184705
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.04227774811582247,
+          "evidently_psi": 0.000957538537110174,
+          "evidently_wasserstein": 0.06973920533157005
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.04146171225585638,
+          "evidently_psi": 0.0007852736141317901,
+          "evidently_wasserstein": 0.06277175440825064
+        },
+        "secs_since_last": {
+          "project_psi": 0.013527721722711357,
+          "evidently_psi": 0.014360416325738591,
+          "evidently_wasserstein": 0.09767614444963982
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.05854453242667231,
+          "evidently_psi": 0.07492098649185944,
+          "evidently_wasserstein": 0.22499622402431863
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.20824317670747497,
+          "evidently_psi": 0.21012417596557587,
+          "evidently_wasserstein": 0.2525694912718924
+        },
+        "home_merchant_km": {
+          "project_psi": 4.6955198789883196e-05,
+          "evidently_psi": 0.00014795204052267053,
+          "evidently_wasserstein": 0.0047597520374084105
+        }
+      }
+    },
+    {
+      "month": "2025-11",
+      "rows": 100540,
+      "project_s": 0.019851699999890116,
+      "evidently_s": 3.5253645000002507,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.051293255289335746,
+          "evidently_psi": 0.001430556693750563,
+          "evidently_wasserstein": 0.08299032588967611
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0006175016296823672,
+          "evidently_psi": 0.0007823525341562522,
+          "evidently_wasserstein": 0.024258018492507208
+        },
+        "tx_count_24h": {
+          "project_psi": 0.01195360585866647,
+          "evidently_psi": 0.021750045385160417,
+          "evidently_wasserstein": 0.11309132096021576
+        },
+        "spend_1h": {
+          "project_psi": 0.004904299818076319,
+          "evidently_psi": 0.00037843702600991874,
+          "evidently_wasserstein": 0.030549855716394434
+        },
+        "spend_24h": {
+          "project_psi": 0.0390200087807792,
+          "evidently_psi": 0.002630406658664701,
+          "evidently_wasserstein": 0.11325889036116356
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.03386117918544496,
+          "evidently_psi": 0.0008841435071807256,
+          "evidently_wasserstein": 0.05448555615187181
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.038708150202614346,
+          "evidently_psi": 0.0006828505453123549,
+          "evidently_wasserstein": 0.04698734785832708
+        },
+        "secs_since_last": {
+          "project_psi": 0.0016112988669493844,
+          "evidently_psi": 0.0019530633708552394,
+          "evidently_wasserstein": 0.03388915327447225
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.011759781304838809,
+          "evidently_psi": 0.018601765446347143,
+          "evidently_wasserstein": 0.11109788562098628
+        },
+        "hour_of_day_utc": {
+          "project_psi": 0.34169458541508235,
+          "evidently_psi": 0.41563231911089726,
+          "evidently_wasserstein": 0.37227984447137547
+        },
+        "home_merchant_km": {
+          "project_psi": 3.669722497350262e-05,
+          "evidently_psi": 0.00021610307846563122,
+          "evidently_wasserstein": 0.003123780749892451
+        }
+      }
+    },
+    {
+      "month": "2025-12",
+      "rows": 100063,
+      "project_s": 0.024126499999510997,
+      "evidently_s": 2.7794970999993893,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07573901076980015,
+          "evidently_psi": 0.002546796281841628,
+          "evidently_wasserstein": 0.08750484167057705
+        },
+        "tx_count_1h": {
+          "project_psi": 0.06891108471100058,
+          "evidently_psi": 0.08553084130277229,
+          "evidently_wasserstein": 0.32984325326018216
+        },
+        "tx_count_24h": {
+          "project_psi": 0.4509976247558847,
+          "evidently_psi": 0.465077415150213,
+          "evidently_wasserstein": 0.7913776543496291
+        },
+        "spend_1h": {
+          "project_psi": 0.03269598577259389,
+          "evidently_psi": 0.0007257008504453449,
+          "evidently_wasserstein": 0.07407213847115034
+        },
+        "spend_24h": {
+          "project_psi": 0.18606291427550548,
+          "evidently_psi": 0.016454296054523223,
+          "evidently_wasserstein": 0.30509401143947323
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.07617710770075649,
+          "evidently_psi": 0.0011500720115719299,
+          "evidently_wasserstein": 0.0340610327955314
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.1061729862201989,
+          "evidently_psi": 0.0014272046644348308,
+          "evidently_wasserstein": 0.05542949983554181
+        },
+        "secs_since_last": {
+          "project_psi": 0.1616996879952322,
+          "evidently_psi": 0.16906756965895606,
+          "evidently_wasserstein": 0.3064361960530571
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.4411908946345986,
+          "evidently_psi": 0.45932109889539147,
+          "evidently_wasserstein": 0.7746164710459462
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.9387435627548575,
+          "evidently_psi": 5.090573044037941,
+          "evidently_wasserstein": 0.6435909889047765
+        },
+        "home_merchant_km": {
+          "project_psi": 2.8704513333076494e-05,
+          "evidently_psi": 0.00020093976704542275,
+          "evidently_wasserstein": 0.0027626861214192387
+        }
+      }
+    },
+    {
+      "month": "2026-01",
+      "rows": 99693,
+      "project_s": 0.024994899999910558,
+      "evidently_s": 2.7091331999999966,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07281986417698516,
+          "evidently_psi": 0.00255363835330693,
+          "evidently_wasserstein": 0.08640120406120678
+        },
+        "tx_count_1h": {
+          "project_psi": 0.03981341674628442,
+          "evidently_psi": 0.04871450175516505,
+          "evidently_wasserstein": 0.19510148178963677
+        },
+        "tx_count_24h": {
+          "project_psi": 0.2932830647651188,
+          "evidently_psi": 0.3439768579332958,
+          "evidently_wasserstein": 0.4498240432961745
+        },
+        "spend_1h": {
+          "project_psi": 0.04499204181518114,
+          "evidently_psi": 0.0007375526372212938,
+          "evidently_wasserstein": 0.08725978478981383
+        },
+        "spend_24h": {
+          "project_psi": 0.25946962287871245,
+          "evidently_psi": 0.01579194252900957,
+          "evidently_wasserstein": 0.2737357624453854
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.07006391389566247,
+          "evidently_psi": 0.0011063386826792969,
+          "evidently_wasserstein": 0.05864224852481808
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.07986545628328576,
+          "evidently_psi": 0.0011966697560797201,
+          "evidently_wasserstein": 0.0590717608807765
+        },
+        "secs_since_last": {
+          "project_psi": 0.09021990238871536,
+          "evidently_psi": 0.09405886138749256,
+          "evidently_wasserstein": 0.2826098644287727
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.28045117272483466,
+          "evidently_psi": 0.353495631468882,
+          "evidently_wasserstein": 0.4530355353235481
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.619893563430762,
+          "evidently_psi": 3.240789520206582,
+          "evidently_wasserstein": 0.6412175796583418
+        },
+        "home_merchant_km": {
+          "project_psi": 0.00012512688283976224,
+          "evidently_psi": 0.00036782725711352284,
+          "evidently_wasserstein": 0.005217308395365378
+        }
+      }
+    },
+    {
+      "month": "2026-02",
+      "rows": 100100,
+      "project_s": 0.018968999999742664,
+      "evidently_s": 3.3266575000006924,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07340508611068249,
+          "evidently_psi": 0.0014668083289953017,
+          "evidently_wasserstein": 0.07347447961921398
+        },
+        "tx_count_1h": {
+          "project_psi": 0.04020970273330085,
+          "evidently_psi": 0.048932837075386225,
+          "evidently_wasserstein": 0.1956079700549102
+        },
+        "tx_count_24h": {
+          "project_psi": 0.31038364801144724,
+          "evidently_psi": 0.4064967340512257,
+          "evidently_wasserstein": 0.4600202940858409
+        },
+        "spend_1h": {
+          "project_psi": 0.04517277187470485,
+          "evidently_psi": 0.0009257642008970595,
+          "evidently_wasserstein": 0.08129595322060688
+        },
+        "spend_24h": {
+          "project_psi": 0.2732097431249777,
+          "evidently_psi": 0.025238298388996543,
+          "evidently_wasserstein": 0.27844864047509055
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.07000577788431314,
+          "evidently_psi": 0.0008580249977703795,
+          "evidently_wasserstein": 0.04878694498307272
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.08006910590243864,
+          "evidently_psi": 0.0008474165472760793,
+          "evidently_wasserstein": 0.05016950910311943
+        },
+        "secs_since_last": {
+          "project_psi": 0.09239290831247712,
+          "evidently_psi": 0.0959312363551856,
+          "evidently_wasserstein": 0.2825351298268611
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.29807488458920195,
+          "evidently_psi": 0.3725439360292852,
+          "evidently_wasserstein": 0.463811393932985
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.632404655182221,
+          "evidently_psi": 3.2488453619163873,
+          "evidently_wasserstein": 0.6434363639870926
+        },
+        "home_merchant_km": {
+          "project_psi": 5.5833315374484807e-05,
+          "evidently_psi": 0.00023095328418944386,
+          "evidently_wasserstein": 0.0038912584718346116
+        }
+      }
+    },
+    {
+      "month": "2026-03",
+      "rows": 100367,
+      "project_s": 0.02492199999960576,
+      "evidently_s": 3.4384267999994336,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07189710106782313,
+          "evidently_psi": 0.0018403025128886843,
+          "evidently_wasserstein": 0.07676887553409602
+        },
+        "tx_count_1h": {
+          "project_psi": 0.007175045800709419,
+          "evidently_psi": 0.010219175555553446,
+          "evidently_wasserstein": 0.09438601862080868
+        },
+        "tx_count_24h": {
+          "project_psi": 0.045635551682718614,
+          "evidently_psi": 0.07578574042899917,
+          "evidently_wasserstein": 0.20209307701694934
+        },
+        "spend_1h": {
+          "project_psi": 0.014045107035407553,
+          "evidently_psi": 0.0007104813201375483,
+          "evidently_wasserstein": 0.0500395938701295
+        },
+        "spend_24h": {
+          "project_psi": 0.07951293250339961,
+          "evidently_psi": 0.006159620493945482,
+          "evidently_wasserstein": 0.16333393867472532
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.03221667909356396,
+          "evidently_psi": 0.001083825487453145,
+          "evidently_wasserstein": 0.023816314669700127
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.04128693289450115,
+          "evidently_psi": 0.0009103361335281794,
+          "evidently_wasserstein": 0.01936182969351945
+        },
+        "secs_since_last": {
+          "project_psi": 0.010940491780426992,
+          "evidently_psi": 0.010972589411713838,
+          "evidently_wasserstein": 0.08484222335122336
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.0422985244091358,
+          "evidently_psi": 0.07119511258602111,
+          "evidently_wasserstein": 0.19749179821266613
+        },
+        "hour_of_day_utc": {
+          "project_psi": 2.8361168920253954,
+          "evidently_psi": 3.307210319285435,
+          "evidently_wasserstein": 0.6355985705167015
+        },
+        "home_merchant_km": {
+          "project_psi": 4.1226852205180543e-05,
+          "evidently_psi": 0.000349125367117135,
+          "evidently_wasserstein": 0.0029543154645336515
+        }
+      }
+    },
+    {
+      "month": "2026-04",
+      "rows": 99482,
+      "project_s": 0.02377379999961704,
+      "evidently_s": 3.3788479999993797,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07512530141896037,
+          "evidently_psi": 0.001357149049717067,
+          "evidently_wasserstein": 0.08247432238933122
+        },
+        "tx_count_1h": {
+          "project_psi": 0.00636522110787556,
+          "evidently_psi": 0.009913514104634612,
+          "evidently_wasserstein": 0.091145762607951
+        },
+        "tx_count_24h": {
+          "project_psi": 0.05379956487232529,
+          "evidently_psi": 0.08231634421257233,
+          "evidently_wasserstein": 0.21459426014759816
+        },
+        "spend_1h": {
+          "project_psi": 0.013783261950249604,
+          "evidently_psi": 0.0004605384523864547,
+          "evidently_wasserstein": 0.05440997700911884
+        },
+        "spend_24h": {
+          "project_psi": 0.08801090559593665,
+          "evidently_psi": 0.00849515646158816,
+          "evidently_wasserstein": 0.17067006199632798
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.03590465612883441,
+          "evidently_psi": 0.00057678428194618,
+          "evidently_wasserstein": 0.042941113642977105
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.042976486437366845,
+          "evidently_psi": 0.0005425544758202079,
+          "evidently_wasserstein": 0.038432830411567004
+        },
+        "secs_since_last": {
+          "project_psi": 0.011000364520269866,
+          "evidently_psi": 0.011170137711941046,
+          "evidently_wasserstein": 0.08774543744729692
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.04953627387882401,
+          "evidently_psi": 0.08573535436996496,
+          "evidently_wasserstein": 0.21025795693159519
+        },
+        "hour_of_day_utc": {
+          "project_psi": 3.4649036360626484,
+          "evidently_psi": 3.4899658062364867,
+          "evidently_wasserstein": 0.5631528699887204
+        },
+        "home_merchant_km": {
+          "project_psi": 0.00014393573882467205,
+          "evidently_psi": 0.00025200848582364744,
+          "evidently_wasserstein": 0.0031469353207745987
+        }
+      }
+    },
+    {
+      "month": "2026-05",
+      "rows": 99640,
+      "project_s": 0.021364899999753106,
+      "evidently_s": 2.596639800000048,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07400690880599978,
+          "evidently_psi": 0.0018585681463454335,
+          "evidently_wasserstein": 0.08069671190417264
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0006367534779480703,
+          "evidently_psi": 0.0021353155949894584,
+          "evidently_wasserstein": 0.03521508600577783
+        },
+        "tx_count_24h": {
+          "project_psi": 0.012091659598556355,
+          "evidently_psi": 0.03218113326502264,
+          "evidently_wasserstein": 0.10277258141493902
+        },
+        "spend_1h": {
+          "project_psi": 0.005387963467267084,
+          "evidently_psi": 0.0010886252196403426,
+          "evidently_wasserstein": 0.03679798213047308
+        },
+        "spend_24h": {
+          "project_psi": 0.044987418908510074,
+          "evidently_psi": 0.006918599113033782,
+          "evidently_wasserstein": 0.12580865379914188
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.0294839068233356,
+          "evidently_psi": 0.0009245114548139916,
+          "evidently_wasserstein": 0.0165867032842631
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.0392164871458534,
+          "evidently_psi": 0.0006835880931511476,
+          "evidently_wasserstein": 0.0154391995487548
+        },
+        "secs_since_last": {
+          "project_psi": 0.0008793208980135843,
+          "evidently_psi": 0.0012157075047407454,
+          "evidently_wasserstein": 0.020734703164948624
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.010767973657115449,
+          "evidently_psi": 0.024489896709979194,
+          "evidently_wasserstein": 0.09641633685733828
+        },
+        "hour_of_day_utc": {
+          "project_psi": 3.5167230761466173,
+          "evidently_psi": 3.62054197671169,
+          "evidently_wasserstein": 0.5633598628512799
+        },
+        "home_merchant_km": {
+          "project_psi": 9.491616335795653e-05,
+          "evidently_psi": 0.0002665970950107331,
+          "evidently_wasserstein": 0.007089028702701939
+        }
+      }
+    },
+    {
+      "month": "2026-06",
+      "rows": 100002,
+      "project_s": 0.019158200000674697,
+      "evidently_s": 2.9703355999999985,
+      "features": {
+        "amount_dollars": {
+          "project_psi": 0.07617668900958849,
+          "evidently_psi": 0.001624292226666463,
+          "evidently_wasserstein": 0.09450150674643035
+        },
+        "tx_count_1h": {
+          "project_psi": 0.0006592357392067483,
+          "evidently_psi": 0.001288266783680836,
+          "evidently_wasserstein": 0.023247183800580957
+        },
+        "tx_count_24h": {
+          "project_psi": 0.011167917059986536,
+          "evidently_psi": 0.02036999555984829,
+          "evidently_wasserstein": 0.08342081400559287
+        },
+        "spend_1h": {
+          "project_psi": 0.0015424594326227136,
+          "evidently_psi": 0.0008457709499071749,
+          "evidently_wasserstein": 0.03130995831415502
+        },
+        "spend_24h": {
+          "project_psi": 0.022480196448133455,
+          "evidently_psi": 0.0033539205346392463,
+          "evidently_wasserstein": 0.06861095666772352
+        },
+        "amount_to_mean_24h": {
+          "project_psi": 0.031363768211972884,
+          "evidently_psi": 0.0006409187432049835,
+          "evidently_wasserstein": 0.0213374280258968
+        },
+        "amount_to_max_24h": {
+          "project_psi": 0.041508493892418175,
+          "evidently_psi": 0.0005285151331068359,
+          "evidently_wasserstein": 0.020289110412519216
+        },
+        "secs_since_last": {
+          "project_psi": 0.00509143900388767,
+          "evidently_psi": 0.005498094922615707,
+          "evidently_wasserstein": 0.05743180851936873
+        },
+        "distinct_merchants_24h": {
+          "project_psi": 0.010781130156060548,
+          "evidently_psi": 0.019141771201196783,
+          "evidently_wasserstein": 0.0826697343890304
+        },
+        "hour_of_day_utc": {
+          "project_psi": 3.7938105050295676,
+          "evidently_psi": 4.666345951486548,
+          "evidently_wasserstein": 0.5636275728110852
+        },
+        "home_merchant_km": {
+          "project_psi": 9.488582429879185e-05,
+          "evidently_psi": 0.0002299824000214789,
+          "evidently_wasserstein": 0.0025513107327992607
+        }
+      }
+    }
+  ]
+}
